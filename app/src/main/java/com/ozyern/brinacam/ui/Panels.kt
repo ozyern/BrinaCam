@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,26 +67,31 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 data class QuickItem(
-    val icon: ImageVector,
     val label: String,
     val active: Boolean,
     val enabled: Boolean = true,
     val onClick: () -> Unit,
+    val icon: @Composable (Color) -> Unit,
 )
 
-/** The 9-dot menu: a rounded glass card of round toggles, OnePlus style. */
+/**
+ * The 2x3-dot menu: a frosted card of round toggles, OnePlus style. Measured
+ * from the OnePlus 13 (dp): 384 wide, 89 dp columns, 61 dp circles, 110.6 dp
+ * row pitch, 28 dp corners.
+ */
 @Composable
 fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .frosted(RoundedCornerShape(30.dp), Color(0xCC2B2B2B))
-            .padding(vertical = 18.dp, horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 13.7.dp)
+            .frosted(RoundedCornerShape(28.dp), Color(0xD92A2A2A), blurRadius = 30.dp)
+            .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(28.dp))
+            .padding(start = 13.8.dp, end = 13.8.dp, top = 27.5.dp, bottom = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         items.chunked(4).forEachIndexed { rowIndex, row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth()) {
                 row.forEachIndexed { colIndex, item ->
                     // Items ripple in one after another as the card opens.
                     val appear = remember { Animatable(0f) }
@@ -89,46 +99,62 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                         delay((rowIndex * 4 + colIndex) * 22L)
                         appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 500f))
                     }
-                    val background by animateColorAsState(
-                        if (item.active) BrinaColors.Accent else Color(0x33FFFFFF),
-                        tween(200),
-                        label = "quickItem",
-                    )
+                    val iconColor = if (item.active) Color(0xFF2A1404) else Color.White
                     Column(
                         Modifier
+                            .weight(1f)
                             .graphicsLayer {
-                                alpha = appear.value.coerceIn(0f, 1f)
+                                alpha = appear.value.coerceIn(0f, 1f) * (if (item.enabled) 1f else 0.4f)
                                 val scale = 0.7f + 0.3f * appear.value
                                 scaleX = scale
                                 scaleY = scale
                                 translationY = (1f - appear.value) * 14.dp.toPx()
                             }
-                            .width(76.dp)
-                            .alpha(if (item.enabled) 1f else 0.4f)
                             .clip(RoundedCornerShape(16.dp))
-                            .clickable(enabled = item.enabled, onClick = item.onClick),
+                            .clickable(enabled = item.enabled, onClick = item.onClick)
+                            .semantics { contentDescription = item.label },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
                             Modifier
-                                .size(54.dp)
+                                .size(61.dp)
                                 .clip(CircleShape)
-                                .background(background),
+                                .background(
+                                    if (item.active) {
+                                        Brush.verticalGradient(listOf(Color(0xFFFF7A0A), Color(0xFFFF9A3C)))
+                                    } else {
+                                        Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x24FFFFFF)))
+                                    }
+                                )
+                                .border(1.dp, if (item.active) Color.Transparent else Color(0x1FFFFFFF), CircleShape)
+                                .rotate(rotation),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                item.icon,
-                                contentDescription = item.label,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp).rotate(rotation),
-                            )
+                            item.icon(iconColor)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        Text(item.label, color = Color(0xCCFFFFFF), fontSize = 11.sp, maxLines = 1)
+                        Spacer(Modifier.height(11.dp))
+                        Text(
+                            item.label,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HdrText(color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("HDR", color = color, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 15.sp)
+        Text("AUTO", color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 10.sp)
     }
 }
 
@@ -149,15 +175,19 @@ fun quickMenuItems(
     onSound: () -> Unit,
     onFilters: () -> Unit,
     onAbout: () -> Unit,
-) = listOf(
-    QuickItem(Icons.Rounded.AspectRatio, aspectLabel, active = false, onClick = onAspect),
-    QuickItem(Icons.Rounded.GridOn, "Grid", active = gridOn, onClick = onGrid),
-    QuickItem(Icons.Rounded.Timer, if (timerSeconds > 0) "${timerSeconds}s" else "Timer", active = timerSeconds > 0, onClick = onTimer),
-    QuickItem(Icons.Rounded.HdrAuto, "Auto HDR", active = hdrOn && hdrAvailable, enabled = hdrAvailable, onClick = onHdr),
-    QuickItem(Icons.Rounded.Flip, "Mirror", active = mirrorOn, onClick = onMirror),
-    QuickItem(if (soundOn) Icons.Rounded.MusicNote else Icons.Rounded.MusicOff, "Sound", active = soundOn, onClick = onSound),
-    QuickItem(Icons.Rounded.Palette, "Filters", active = false, enabled = filtersAvailable, onClick = onFilters),
-    QuickItem(Icons.Rounded.Settings, "Settings", active = false, onClick = onAbout),
+): List<QuickItem> = listOf(
+    QuickItem("Aspect ratio $aspectLabel", active = false, onClick = onAspect) { AspectGlyph(Modifier.size(26.dp)) },
+    QuickItem("Grid", active = gridOn, onClick = onGrid) { GridGlyph(Modifier.size(26.dp)) },
+    QuickItem(if (timerSeconds > 0) "Timer ${timerSeconds}s" else "Timer", active = timerSeconds > 0, onClick = onTimer) {
+        TimerGlyph(0, Modifier.size(26.dp))
+    },
+    QuickItem("Filters", active = false, enabled = filtersAvailable, onClick = onFilters) { color ->
+        FiltersGlyph(Modifier.size(26.dp), color)
+    },
+    QuickItem("Auto HDR", active = hdrOn && hdrAvailable, enabled = hdrAvailable, onClick = onHdr) { color -> HdrText(color) },
+    QuickItem("Mirror", active = mirrorOn, onClick = onMirror) { MirrorGlyph(Modifier.size(26.dp)) },
+    QuickItem("Sound", active = soundOn, onClick = onSound) { SoundGlyph(soundOn, Modifier.size(26.dp)) },
+    QuickItem("Settings", active = false, onClick = onAbout) { GearGlyph(Modifier.size(26.dp)) },
 )
 
 /** Exposure slider shown under the top bar when EV is tapped. */

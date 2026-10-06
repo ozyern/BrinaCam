@@ -231,22 +231,22 @@ fun ZoomControls(
                         Icons.Rounded.HdrAuto,
                         contentDescription = null,
                         tint = if (hdrOn) BrinaColors.Accent else Color.White,
-                        modifier = Modifier.size(22.dp).rotate(rotation),
+                        modifier = Modifier.size(20.dp).rotate(rotation),
                     )
                 }
                 Spacer(Modifier.weight(1f))
                 if (canZoom) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.6.dp),
                     ) {
                         presets.forEachIndexed { index, preset ->
                             val selected = index == selectedIndex
                             Box(
                                 Modifier
-                                    .size(40.dp)
+                                    .size(36.dp)
+                                    .then(if (selected) Modifier.frosted(CircleShape, Color(0x8C5A3A1C), 12.dp) else Modifier)
                                     .clip(CircleShape)
-                                    .then(if (selected) Modifier.background(BrinaColors.ChipSelected) else Modifier)
                                     .clickable { glideTo(preset) }
                                     .semantics { contentDescription = "Zoom ${formatZoom(preset)}x" },
                                 contentAlignment = Alignment.Center,
@@ -254,8 +254,8 @@ fun ZoomControls(
                                 Text(
                                     if (selected) formatZoom(zoom) + "×" else formatZoom(preset),
                                     color = if (selected) BrinaColors.Accent else Color.White,
-                                    fontSize = if (selected) 14.sp else 15.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = if (selected) 13.sp else 14.sp,
+                                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Bold,
                                     modifier = Modifier.rotate(rotation),
                                 )
                             }
@@ -265,7 +265,7 @@ fun ZoomControls(
                 Spacer(Modifier.weight(1f))
                 SideButton(visible = filtersAvailable, description = "Filters", onClick = onFilters) {
                     FiltersGlyph(
-                        Modifier.size(22.dp).rotate(rotation),
+                        Modifier.size(20.dp).rotate(rotation),
                         color = if (filterActive) BrinaColors.Accent else Color.White,
                     )
                 }
@@ -283,12 +283,12 @@ private fun SideButton(
 ) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(36.dp)
+            .then(if (visible) Modifier.frosted(CircleShape, Color(0x4D000000), 12.dp) else Modifier)
             .clip(CircleShape)
             .then(
                 if (visible) {
                     Modifier
-                        .background(Color(0x59000000))
                         .clickable(onClick = onClick)
                         .semantics { contentDescription = description }
                 } else {

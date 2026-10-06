@@ -73,7 +73,15 @@ import com.ozyern.brinacam.camera.CameraViewModel
 import com.ozyern.brinacam.camera.CaptureMode
 import kotlinx.coroutines.delay
 
-internal val TopBarHeight = 76.dp
+/*
+ * Vertical layout measured from the OnePlus 13 camera (dp from the top of the screen):
+ * viewfinder top 125.7, top controls centred 45.7 above it, shutter centred 64 below the
+ * bottom of the 4:3 frame and the mode strip 157.6 below it.
+ */
+private val ViewfinderTop = 125.7.dp
+private val TopControlsAboveViewfinder = 45.7.dp
+private val ShutterBelowFrame = 64.dp
+private val ModesBelowFrame = 157.6.dp
 
 @Composable
 fun CameraScreen(vm: CameraViewModel = viewModel()) {
@@ -152,8 +160,14 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
-            val viewfinderTop = statusTop + TopBarHeight
+            val viewfinderTop = maxOf(ViewfinderTop, statusTop + 70.dp)
             val viewfinderHeight = maxWidth * vm.aspect.heightOverWidth
+            // Bottom controls follow the 4:3 frame, but never run into the gesture bar.
+            val frameBottom = viewfinderTop + maxWidth * (4f / 3f)
+            val lowestShutter = maxHeight - navBottom - 12.dp - ModeStripHeight / 2 - (ModesBelowFrame - ShutterBelowFrame)
+            val shutterCenter = minOf(frameBottom + ShutterBelowFrame, lowestShutter)
+            val modesCenter = shutterCenter + (ModesBelowFrame - ShutterBelowFrame)
+            val topControlsCenter = viewfinderTop - TopControlsAboveViewfinder
 
             // Everything the glass controls refract lives in this layer.
             Box(
@@ -287,7 +301,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                             closePanels()
                             filtersOpen = open
                         },
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        modifier = Modifier.padding(bottom = 1.dp),
                     )
                 }
 
@@ -315,7 +329,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     closePanels()
                     quickMenuOpen = open
                 },
-                modifier = Modifier.padding(top = statusTop),
+                modifier = Modifier.padding(top = topControlsCenter - ControlHeight / 2),
             )
 
             AnimatedVisibility(
@@ -334,7 +348,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
             }
 
             // Bottom controls.
-            Column(Modifier.align(Alignment.BottomCenter)) {
+            Column(Modifier.padding(top = shutterCenter - ShutterRowHeight / 2)) {
                 ShutterRow(
                     thumbnail = vm.thumbnail,
                     mode = vm.mode,
@@ -357,6 +371,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     },
                     onSwitch = vm::switchLens,
                 )
+                Spacer(Modifier.height(modesCenter - shutterCenter - ShutterRowHeight / 2 - ModeStripHeight / 2))
                 ModeStrip(
                     modes = vm.availableModes,
                     selected = vm.mode,
@@ -368,7 +383,6 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         quickMenuOpen = open
                     },
                 )
-                Spacer(Modifier.height(navBottom + 12.dp))
             }
 
             // Quick settings card pops up over the bottom controls, like OnePlus.
@@ -388,9 +402,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         transformOrigin = TransformOrigin(0.5f, 1f),
                     ) +
                     slideOutVertically(tween(180, easing = FastOutLinearInEasing)) { it / 14 },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = navBottom + 28.dp),
+                modifier = Modifier.padding(top = minOf(frameBottom - 68.6.dp, maxHeight - navBottom - 262.dp)),
             ) {
                 QuickMenu(
                     items = quickMenuItems(

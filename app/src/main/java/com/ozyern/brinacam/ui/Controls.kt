@@ -102,6 +102,10 @@ fun RoundButton(
 }
 
 // ---- Top bar ------------------------------------------------------------------------------
+// Measured from the OnePlus 13 camera (dp): pill 133.7 x 36.3 at x=16, round buttons 36.3
+// with an 11.5 gap and 16 right margin, all centred 45.7 above the viewfinder.
+
+val ControlHeight = 36.dp
 
 @Composable
 fun TopBar(
@@ -122,76 +126,54 @@ fun TopBar(
     Row(
         modifier
             .fillMaxWidth()
-            .height(TopBarHeight)
-            .padding(horizontal = 14.dp),
+            .height(ControlHeight)
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             Modifier
-                .height(40.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .height(ControlHeight)
+                .clip(RoundedCornerShape(18.dp))
                 .background(BrinaColors.Surface)
-                .padding(horizontal = 4.dp),
+                .padding(start = 6.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PillIcon(
-                icon = when (flash) {
-                    FlashSetting.OFF -> Icons.Rounded.FlashOff
-                    FlashSetting.AUTO -> Icons.Rounded.FlashAuto
-                    FlashSetting.ON -> Icons.Rounded.FlashOn
-                },
-                description = "Flash",
-                rotation = rotation,
-                tint = if (flash == FlashSetting.ON) BrinaColors.Accent else Color.White,
-                onClick = onFlash,
-            )
-            PillIcon(
-                icon = when (timerSeconds) {
-                    3 -> Icons.Rounded.Timer3
-                    10 -> Icons.Rounded.Timer10
-                    else -> Icons.Rounded.TimerOff
-                },
-                description = "Timer",
-                rotation = rotation,
-                tint = if (timerSeconds > 0) BrinaColors.Accent else Color.White,
-                onClick = onTimer,
-            )
+            PillButton("Flash", onFlash) {
+                FlashGlyph(flash, Modifier.size(20.dp).rotate(rotation))
+            }
+            PillButton("Timer", onTimer) {
+                TimerGlyph(timerSeconds, Modifier.size(20.dp).rotate(rotation))
+            }
             Row(
                 Modifier
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .height(ControlHeight)
                     .clickable(enabled = exposureEnabled, onClick = onExposure)
                     .semantics { contentDescription = "Exposure" }
-                    .padding(start = 4.dp, end = 12.dp)
+                    .padding(start = 6.dp)
                     .rotate(rotation),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "EV",
-                    color = BrinaColors.TextDim,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.align(Alignment.Top).padding(top = 7.dp),
+                    color = Color(0xFF9A9A9A),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Top).padding(top = 9.dp),
                 )
-                Spacer(Modifier.width(3.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(
                     formatEv(exposureValue),
                     color = if (exposureValue != 0f) BrinaColors.Accent else Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
                 )
             }
         }
         Spacer(Modifier.weight(1f))
-        RoundButton("Focus lock", onFocusLock) {
-            Icon(
-                Icons.Rounded.CenterFocusWeak,
-                contentDescription = null,
-                tint = if (focusLocked) BrinaColors.Accent else Color.White,
-                modifier = Modifier.size(22.dp).rotate(rotation),
-            )
+        RoundButton("Focus lock", onFocusLock, size = 36) {
+            FocusFrameGlyph(focusLocked, Modifier.size(19.dp).rotate(rotation))
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(11.5.dp))
         val moreBackground by animateColorAsState(
             if (quickMenuOpen) Color.White else BrinaColors.Surface,
             tween(200),
@@ -202,28 +184,23 @@ fun TopBar(
             tween(200),
             label = "moreDots",
         )
-        RoundButton("More controls", onMore, color = moreBackground) {
-            SixDots(Modifier.size(width = 16.dp, height = 11.dp), color = moreDots)
+        RoundButton("More controls", onMore, size = 36, color = moreBackground) {
+            SixDots(Modifier.size(width = 14.dp, height = 9.dp), color = moreDots)
         }
     }
 }
 
 @Composable
-private fun PillIcon(
-    icon: ImageVector,
-    description: String,
-    rotation: Float,
-    tint: Color,
-    onClick: () -> Unit,
-) {
+private fun PillButton(description: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(34.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(21.dp).rotate(rotation))
+        content()
     }
 }
 
@@ -233,7 +210,7 @@ fun SixDots(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier) {
         val stepX = size.width / 3f
         val stepY = size.height / 2f
-        val radius = minOf(stepX, stepY) * 0.36f
+        val radius = minOf(stepX, stepY) * 0.38f
         for (row in 0..1) for (col in 0..2) {
             drawCircle(color, radius, Offset(stepX * (col + 0.5f), stepY * (row + 0.5f)))
         }
@@ -247,6 +224,10 @@ fun formatEv(value: Float): String = when {
 }
 
 // ---- Bottom row ---------------------------------------------------------------------------
+// Thumbnail and switch are 45.5 dp, centred at 1/6 and 5/6 of the width; the shutter is a
+// 61 dp orange disc in a 75 dp dark ring, all centred on one line.
+
+val ShutterRowHeight = 100.dp
 
 @Composable
 fun ShutterRow(
@@ -262,15 +243,15 @@ fun ShutterRow(
     Row(
         modifier
             .fillMaxWidth()
-            .height(116.dp),
+            .height(ShutterRowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
-                    .size(46.dp)
+                    .size(45.5.dp)
                     .rotate(rotation)
-                    .clip(RoundedCornerShape(9.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(BrinaColors.Surface)
                     .clickable(onClick = onGallery)
                     .semantics { contentDescription = "Gallery" },
@@ -280,7 +261,7 @@ fun ShutterRow(
                         thumbnail.asImageBitmap(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(46.dp),
+                        modifier = Modifier.size(45.5.dp),
                     )
                 }
             }
@@ -297,20 +278,14 @@ fun ShutterRow(
                     turns += 1f
                     onSwitch()
                 },
-                size = 46,
+                size = 45,
             ) {
-                Icon(
-                    Icons.Rounded.Sync,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp).rotate(rotation + spin),
-                )
+                SyncGlyph(Modifier.size(24.dp).rotate(rotation + spin))
             }
         }
     }
 }
 
-/** Orange disc in a thin bronze ring with a soft glow, like the OnePlus shutter. */
 @Composable
 fun ShutterButton(mode: CaptureMode, isRecording: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -321,55 +296,60 @@ fun ShutterButton(mode: CaptureMode, isRecording: Boolean, onClick: () -> Unit) 
         label = "press",
     )
     val isVideo = mode == CaptureMode.VIDEO
-    val top by animateColorAsState(if (isVideo) Color(0xFFF2555A) else Color(0xFFFF9B2F), label = "top")
-    val bottom by animateColorAsState(if (isVideo) BrinaColors.Recording else Color(0xFFF7741A), label = "bottom")
+    val top by animateColorAsState(if (isVideo) Color(0xFFF0585C) else Color(0xFFEC983E), label = "top")
+    val mid by animateColorAsState(if (isVideo) Color(0xFFE94D52) else Color(0xFFEC8C38), label = "mid")
+    val bottom by animateColorAsState(if (isVideo) Color(0xFFE0434A) else Color(0xFFEE7C33), label = "bottom")
 
     Box(
         Modifier
-            .size(100.dp)
+            .size(ShutterRowHeight)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = "Shutter" },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(100.dp)) {
+        Canvas(Modifier.size(ShutterRowHeight)) {
             val c = Offset(size.width / 2f, size.height / 2f)
+            // Faint warm glow.
             drawCircle(
                 Brush.radialGradient(
-                    0.55f to bottom.copy(alpha = 0.28f),
+                    0.6f to bottom.copy(alpha = 0.16f),
                     1f to Color.Transparent,
                     center = c,
                     radius = size.minDimension / 2f,
                 ),
             )
-            drawCircle(Color.Black, radius = 38.dp.toPx(), center = c)
+            // 75 dp ring: dark warm grey with a slightly lighter rim.
+            drawCircle(Color(0xFF332C29), radius = 37.5.dp.toPx(), center = c)
             drawCircle(
-                Brush.verticalGradient(listOf(Color(0xFF5A3A22), Color(0xFF2E2016))),
+                Color(0xFF4C4240),
                 radius = 37.dp.toPx(),
                 center = c,
-                style = Stroke(width = 3.dp.toPx()),
+                style = Stroke(width = 1.dp.toPx()),
             )
         }
         if (isRecording) {
             Box(
                 Modifier
-                    .size(28.dp)
+                    .size(26.dp)
                     .scale(press)
-                    .clip(RoundedCornerShape(7.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(BrinaColors.Recording),
             )
         } else {
             Box(
                 Modifier
-                    .size(62.dp)
+                    .size(61.dp)
                     .scale(press)
                     .clip(CircleShape)
-                    .background(Brush.verticalGradient(listOf(top, bottom))),
+                    .background(Brush.verticalGradient(listOf(top, mid, bottom))),
             )
         }
     }
 }
 
 // ---- Mode strip ---------------------------------------------------------------------------
+
+val ModeStripHeight = 46.dp
 
 @Composable
 fun ModeStrip(
@@ -394,7 +374,7 @@ fun ModeStrip(
     Box(
         modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .height(ModeStripHeight)
             .onSizeChanged { width = it.width }
             .pointerInput(modes, selected, enabled) {
                 var travel = 0f
@@ -415,10 +395,10 @@ fun ModeStrip(
                 drawContent()
                 drawRect(
                     Brush.horizontalGradient(
-                        0f to Color.Black.copy(alpha = 0.25f),
-                        0.14f to Color.Black,
-                        0.86f to Color.Black,
-                        1f to Color.Black.copy(alpha = 0.25f),
+                        0f to Color.Black.copy(alpha = 0.35f),
+                        0.2f to Color.Black,
+                        0.8f to Color.Black,
+                        1f to Color.Black.copy(alpha = 0.35f),
                     ),
                     blendMode = BlendMode.DstIn,
                 )
@@ -442,33 +422,32 @@ fun ModeStrip(
                         .onGloballyPositioned {
                             centers[mode] = it.positionInParent().x + it.size.width / 2f
                         }
-                        .padding(horizontal = 6.dp)
-                        .height(46.dp)
+                        .height(34.5.dp)
                         .then(
                             if (isSelected) {
                                 Modifier
-                                    .clip(RoundedCornerShape(23.dp))
-                                    .background(Color(0xFF141414))
-                                    .border(BorderStroke(1.dp, Color(0xFF2A2A2A)), RoundedCornerShape(23.dp))
+                                    .clip(RoundedCornerShape(17.25.dp))
+                                    .background(Color(0xFF191919))
+                                    .border(BorderStroke(1.dp, Color(0xFF2B2B2B)), RoundedCornerShape(17.25.dp))
                             } else {
-                                Modifier.clip(RoundedCornerShape(23.dp))
+                                Modifier.clip(RoundedCornerShape(17.25.dp))
                             }
                         )
                         .clickable(enabled = enabled) {
                             if (isSelected && mode == CaptureMode.PHOTO) onPhotoOptions() else onSelect(mode)
                         }
-                        .padding(horizontal = 22.dp),
+                        .padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         mode.label,
                         color = textColor,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
                     )
                     if (isSelected && mode == CaptureMode.PHOTO) {
-                        Spacer(Modifier.width(7.dp))
-                        Canvas(Modifier.size(width = 9.dp, height = 6.dp)) {
+                        Spacer(Modifier.width(8.dp))
+                        Canvas(Modifier.size(width = 8.dp, height = 5.5.dp)) {
                             val path = Path().apply {
                                 moveTo(size.width / 2f, 0f)
                                 lineTo(size.width, size.height)
