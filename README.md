@@ -25,3 +25,9 @@ Requires Android 10 or newer.
 The app lives in `app/`. Every push builds a signed APK in GitHub Actions,
 smoke-tests it on an emulator, and attaches the APK, screenshots and logs to a
 pre-release.
+
+## Credits
+
+- Typeface: [Manrope](https://github.com/googlefonts/manrope), SIL Open Font
+  License 1.1 (`licenses/Manrope-OFL.txt`)
+- Liquid-glass/blur surfaces: [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)

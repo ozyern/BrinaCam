@@ -320,10 +320,10 @@ fun FiltersGlyph(modifier: Modifier = Modifier, color: Color = Color.White) {
 @Composable
 private fun ZoomDial(zoom: Float, minZoom: Float, maxZoom: Float, presets: List<Float>, focalLength: Float) {
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-    val mmStyle = TextStyle(color = Color(0xB3FFFFFF), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-    val currentStyle = TextStyle(color = BrinaColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-    val currentMmStyle = TextStyle(color = BrinaColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+    val labelStyle = TextStyle(fontFamily = BrinaFont, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    val mmStyle = TextStyle(fontFamily = BrinaFont, color = Color(0xB3FFFFFF), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+    val currentStyle = TextStyle(fontFamily = BrinaFont, color = BrinaColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    val currentMmStyle = TextStyle(fontFamily = BrinaFont, color = BrinaColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     val density = LocalDensity.current
 
     Box(
