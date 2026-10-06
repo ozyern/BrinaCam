@@ -1,8 +1,18 @@
 package com.ozyern.brinacam.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,9 +46,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,7 +62,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.cos
@@ -101,17 +118,42 @@ fun ZoomControls(
     val presets = remember(minZoom, maxZoom) { zoomPresets(minZoom, maxZoom) }
     val selectedIndex = presets.indexOfLast { it <= zoom + 0.05f }.coerceAtLeast(0)
     val currentZoom by rememberUpdatedState(zoom)
-    var dragging by remember { mutableStateOf(false) }
+    val currentOnZoom by rememberUpdatedState(onZoom)
+    var interacting by remember { mutableStateOf(false) }
     var releaseTick by remember { mutableIntStateOf(0) }
     var dialVisible by remember { mutableStateOf(false) }
     val pxPerStop = with(LocalDensity.current) { 70.dp.toPx() }
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    var motion by remember { mutableStateOf<Job?>(null) }
 
-    LaunchedEffect(dragging, releaseTick) {
-        if (dragging) {
+    LaunchedEffect(interacting, releaseTick) {
+        if (interacting) {
             dialVisible = true
         } else if (dialVisible) {
-            delay(1200)
+            delay(1100)
             dialVisible = false
+        }
+    }
+
+    // Light tick whenever the zoom crosses a preset, like a detent.
+    val presetIndex = presets.indexOfLast { it <= zoom + 0.005f }
+    var lastPresetIndex by remember { mutableIntStateOf(presetIndex) }
+    LaunchedEffect(presetIndex) {
+        if (presetIndex != lastPresetIndex && dialVisible) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        lastPresetIndex = presetIndex
+    }
+
+    // Moves the zoom in log space so every stop takes the same time.
+    fun glideTo(target: Float) {
+        motion?.cancel()
+        motion = scope.launch {
+            val anim = Animatable(log2(currentZoom))
+            anim.animateTo(log2(target), tween(320, easing = FastOutSlowInEasing)) {
+                currentOnZoom(2f.pow(value))
+            }
         }
     }
 
@@ -121,25 +163,60 @@ fun ZoomControls(
             .height(170.dp)
             .pointerInput(minZoom, maxZoom) {
                 if (!canZoom) return@pointerInput
+                val tracker = VelocityTracker()
+                val lo = log2(minZoom)
+                val hi = log2(maxZoom)
                 detectHorizontalDragGestures(
-                    onDragStart = { dragging = true },
-                    onDragEnd = { dragging = false; releaseTick++ },
-                    onDragCancel = { dragging = false; releaseTick++ },
+                    onDragStart = {
+                        motion?.cancel()
+                        tracker.resetTracking()
+                        interacting = true
+                    },
+                    onDragEnd = {
+                        // Keep spinning with the release velocity, then settle.
+                        val velocity = -tracker.calculateVelocity().x / pxPerStop
+                        motion = scope.launch {
+                            val anim = Animatable(log2(currentZoom))
+                            anim.updateBounds(lo, hi)
+                            anim.animateDecay(velocity, exponentialDecay(frictionMultiplier = 2.2f)) {
+                                currentOnZoom(2f.pow(value))
+                            }
+                            interacting = false
+                            releaseTick++
+                        }
+                    },
+                    onDragCancel = {
+                        interacting = false
+                        releaseTick++
+                    },
                 ) { change, dx ->
                     change.consume()
-                    val next = 2f.pow(log2(currentZoom) - dx / pxPerStop)
-                    onZoom(next.coerceIn(minZoom, maxZoom))
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    val next = 2f.pow((log2(currentZoom) - dx / pxPerStop).coerceIn(lo, hi))
+                    currentOnZoom(next)
                 }
             },
         contentAlignment = Alignment.BottomCenter,
     ) {
-        AnimatedVisibility(visible = dialVisible, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(
+            visible = dialVisible,
+            enter = fadeIn(tween(140)) +
+                slideInVertically(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 } +
+                scaleIn(
+                    spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+                    initialScale = 0.88f,
+                    transformOrigin = TransformOrigin(0.5f, 1f),
+                ),
+            exit = fadeOut(tween(220)) +
+                slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 4 } +
+                scaleOut(tween(260, easing = FastOutSlowInEasing), targetScale = 0.92f, transformOrigin = TransformOrigin(0.5f, 1f)),
+        ) {
             ZoomDial(zoom = zoom, minZoom = minZoom, maxZoom = maxZoom, presets = presets, focalLength = focalLength)
         }
         AnimatedVisibility(
             visible = !dialVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(220, delayMillis = 80)),
+            exit = fadeOut(tween(120)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Row(
@@ -170,7 +247,7 @@ fun ZoomControls(
                                     .size(40.dp)
                                     .clip(CircleShape)
                                     .then(if (selected) Modifier.background(BrinaColors.ChipSelected) else Modifier)
-                                    .clickable { onZoom(preset) }
+                                    .clickable { glideTo(preset) }
                                     .semantics { contentDescription = "Zoom ${formatZoom(preset)}x" },
                                 contentAlignment = Alignment.Center,
                             ) {

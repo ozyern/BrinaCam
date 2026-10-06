@@ -1,6 +1,8 @@
 package com.ozyern.brinacam.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -38,6 +40,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +50,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +58,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ozyern.brinacam.camera.ColorEffect
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 data class QuickItem(
@@ -75,11 +80,29 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
             .padding(vertical = 18.dp, horizontal = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        items.chunked(4).forEach { row ->
+        items.chunked(4).forEachIndexed { rowIndex, row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                row.forEach { item ->
+                row.forEachIndexed { colIndex, item ->
+                    // Items ripple in one after another as the card opens.
+                    val appear = remember { Animatable(0f) }
+                    LaunchedEffect(Unit) {
+                        delay((rowIndex * 4 + colIndex) * 22L)
+                        appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 500f))
+                    }
+                    val background by animateColorAsState(
+                        if (item.active) BrinaColors.Accent else Color(0x33FFFFFF),
+                        tween(200),
+                        label = "quickItem",
+                    )
                     Column(
                         Modifier
+                            .graphicsLayer {
+                                alpha = appear.value.coerceIn(0f, 1f)
+                                val scale = 0.7f + 0.3f * appear.value
+                                scaleX = scale
+                                scaleY = scale
+                                translationY = (1f - appear.value) * 14.dp.toPx()
+                            }
                             .width(76.dp)
                             .alpha(if (item.enabled) 1f else 0.4f)
                             .clip(RoundedCornerShape(16.dp))
@@ -90,7 +113,7 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                             Modifier
                                 .size(54.dp)
                                 .clip(CircleShape)
-                                .background(if (item.active) BrinaColors.Accent else Color(0x33FFFFFF)),
+                                .background(background),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(

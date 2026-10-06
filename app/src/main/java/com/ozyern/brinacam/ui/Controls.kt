@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -191,15 +192,18 @@ fun TopBar(
             )
         }
         Spacer(Modifier.width(10.dp))
-        RoundButton(
-            "More controls",
-            onMore,
-            color = if (quickMenuOpen) Color.White else BrinaColors.Surface,
-        ) {
-            SixDots(
-                Modifier.size(width = 16.dp, height = 11.dp),
-                color = if (quickMenuOpen) Color.Black else Color.White,
-            )
+        val moreBackground by animateColorAsState(
+            if (quickMenuOpen) Color.White else BrinaColors.Surface,
+            tween(200),
+            label = "moreBg",
+        )
+        val moreDots by animateColorAsState(
+            if (quickMenuOpen) Color.Black else Color.White,
+            tween(200),
+            label = "moreDots",
+        )
+        RoundButton("More controls", onMore, color = moreBackground) {
+            SixDots(Modifier.size(width = 16.dp, height = 11.dp), color = moreDots)
         }
     }
 }

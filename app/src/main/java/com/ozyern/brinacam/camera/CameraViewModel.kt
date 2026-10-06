@@ -15,6 +15,7 @@ import android.media.AudioAttributes
 import android.media.MediaActionSound
 import android.media.SoundPool
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Rational
@@ -173,6 +174,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private var previewView: PreviewView? = null
     private var targetRotation = Surface.ROTATION_0
     private var timerJob: Job? = null
+    private var lastZoomRequest = 0L
 
     init {
         loadLastMedia()
@@ -271,6 +273,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         val cam = camera ?: return
         val clamped = ratio.coerceIn(minZoom, maxZoom)
         zoomRatio = clamped
+        lastZoomRequest = SystemClock.uptimeMillis()
         cam.cameraControl.setZoomRatio(clamped)
     }
 
@@ -541,7 +544,9 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         val cam = camera ?: return
         cam.cameraInfo.zoomState.removeObservers(owner)
         cam.cameraInfo.zoomState.observe(owner) { state ->
-            zoomRatio = state.zoomRatio
+            // While the user is zooming, the camera reports values that lag behind
+            // the gesture; keep showing the requested value so the dial doesn't jitter.
+            if (SystemClock.uptimeMillis() - lastZoomRequest > 400) zoomRatio = state.zoomRatio
             minZoom = state.minZoomRatio
             maxZoom = state.maxZoomRatio
         }

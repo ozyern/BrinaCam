@@ -7,6 +7,9 @@ import android.view.Surface
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -317,8 +320,8 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
 
             AnimatedVisibility(
                 visible = exposureOpen,
-                enter = fadeIn() + slideInVertically { -it / 2 },
-                exit = fadeOut() + slideOutVertically { -it / 2 },
+                enter = fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.85f, stiffness = 420f)) { -it / 2 },
+                exit = fadeOut(tween(140)) + slideOutVertically(tween(160)) { -it / 2 },
                 modifier = Modifier.padding(top = viewfinderTop + 8.dp),
             ) {
                 ExposurePanel(
@@ -371,8 +374,20 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
             // Quick settings card pops up over the bottom controls, like OnePlus.
             AnimatedVisibility(
                 visible = quickMenuOpen,
-                enter = fadeIn(tween(160)) + scaleIn(initialScale = 0.9f, transformOrigin = TransformOrigin(0.85f, 1f)),
-                exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.9f, transformOrigin = TransformOrigin(0.85f, 1f)),
+                enter = fadeIn(tween(180, easing = LinearOutSlowInEasing)) +
+                    scaleIn(
+                        spring(dampingRatio = 0.78f, stiffness = 420f),
+                        initialScale = 0.86f,
+                        transformOrigin = TransformOrigin(0.5f, 1f),
+                    ) +
+                    slideInVertically(spring(dampingRatio = 0.85f, stiffness = 420f)) { it / 10 },
+                exit = fadeOut(tween(150, easing = FastOutLinearInEasing)) +
+                    scaleOut(
+                        tween(180, easing = FastOutLinearInEasing),
+                        targetScale = 0.92f,
+                        transformOrigin = TransformOrigin(0.5f, 1f),
+                    ) +
+                    slideOutVertically(tween(180, easing = FastOutLinearInEasing)) { it / 14 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBottom + 28.dp),
