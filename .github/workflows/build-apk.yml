@@ -8,11 +8,27 @@ on:
 permissions:
   contents: write
 
+# One build at a time, so the single release below is never raced.
+concurrency:
+  group: build-apk
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      # Releases used to be one per build (build-N); only a single "latest" is kept now.
+      - name: Remove old numbered releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
+            | grep -E '^build-[0-9]+$' \
+            | while read -r tag; do
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+              done
 
       - uses: actions/setup-java@v5
         with:
@@ -49,13 +65,19 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
           script: bash .github/scripts/smoke-test.sh BrinaCam.apk
 
+      - name: Replace the previous latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: BrinaCam build ${{ github.run_number }}
+          tag_name: latest
+          name: BrinaCam (latest build)
+          body: Built from ${{ github.sha }} on ${{ github.ref_name }}.
           target_commitish: ${{ github.sha }}
-          prerelease: true
+          make_latest: true
           files: |
             BrinaCam.apk
             smoke-test/*
