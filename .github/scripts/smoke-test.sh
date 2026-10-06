@@ -20,6 +20,7 @@ sleep 10
 adb exec-out screencap -p > $OUT/screen-2.png
 
 adb logcat -d -b crash > $OUT/crash.txt
+[ -s $OUT/crash.txt ] || echo "No crashes." > $OUT/crash.txt
 adb logcat -d > $OUT/logcat-full.txt
 echo "===== crash buffer ====="
 cat $OUT/crash.txt
