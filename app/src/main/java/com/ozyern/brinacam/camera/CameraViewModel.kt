@@ -11,7 +11,9 @@ import android.graphics.Bitmap
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.media.AudioAttributes
 import android.media.MediaActionSound
+import android.media.SoundPool
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
@@ -20,6 +22,7 @@ import android.util.Size
 import android.view.Surface
 import android.widget.Toast
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import com.ozyern.brinacam.R
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
@@ -76,6 +79,16 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("brinacam", Context.MODE_PRIVATE)
     private val mainExecutor = ContextCompat.getMainExecutor(app)
     private val sound = MediaActionSound()
+    private val shutterPool = SoundPool.Builder()
+        .setMaxStreams(2)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        )
+        .build()
+    private val shutterSoundId = shutterPool.load(app, R.raw.shutter, 1)
 
     // ---- UI state -------------------------------------------------------------------------
 
@@ -108,6 +121,12 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     var minZoom by mutableFloatStateOf(1f)
         private set
     var maxZoom by mutableFloatStateOf(1f)
+        private set
+
+    /** 35 mm-equivalent focal length of the 1x lens, for the zoom dial. */
+    var focalLength by mutableFloatStateOf(24f)
+        private set
+    var focusLocked by mutableStateOf(false)
         private set
 
     var exposureSupported by mutableStateOf(false)
@@ -264,7 +283,25 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         cam.cameraControl.setExposureCompensationIndex(clamped)
     }
 
+    /** Locks focus and exposure on the centre of the frame until tapped again. */
+    fun toggleFocusLock() {
+        val cam = camera ?: return
+        val view = previewView ?: return
+        if (focusLocked) {
+            cam.cameraControl.cancelFocusAndMetering()
+            focusLocked = false
+            return
+        }
+        val point = view.meteringPointFactory.createPoint(view.width / 2f, view.height / 2f)
+        val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+            .disableAutoCancel()
+            .build()
+        cam.cameraControl.startFocusAndMetering(action)
+        focusLocked = true
+    }
+
     fun focusAt(x: Float, y: Float) {
+        focusLocked = false
         val cam = camera ?: return
         val view = previewView ?: return
         val point = view.meteringPointFactory.createPoint(x, y)
@@ -311,7 +348,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private fun takePhoto() {
         val capture = imageCapture ?: return
         captureTick++
-        if (shutterSound) sound.play(MediaActionSound.SHUTTER_CLICK)
+        if (shutterSound) shutterPool.play(shutterSoundId, 1f, 1f, 1, 0, 1f)
 
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "IMG_" + timestamp())
@@ -517,6 +554,19 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         exposureIndex = 0
         if (exposureSupported) cam.cameraControl.setExposureCompensationIndex(0)
 
+        focusLocked = false
+        focalLength = runCatching {
+            val info = Camera2CameraInfo.from(cam.cameraInfo)
+            val focal = info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.firstOrNull()
+            val sensor = info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+            if (focal != null && sensor != null) {
+                val diagonal = kotlin.math.hypot(sensor.width.toDouble(), sensor.height.toDouble())
+                (focal * 43.27 / diagonal).toFloat()
+            } else {
+                null
+            }
+        }.getOrNull()?.takeIf { it in 10f..80f } ?: 24f
+
         val available = runCatching {
             Camera2CameraInfo.from(cam.cameraInfo)
                 .getCameraCharacteristic(CameraCharacteristics.CONTROL_AVAILABLE_EFFECTS)
@@ -594,5 +644,6 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         recording?.stop()
         sound.release()
+        shutterPool.release()
     }
 }

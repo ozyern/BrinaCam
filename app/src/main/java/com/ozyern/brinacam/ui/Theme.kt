@@ -9,9 +9,9 @@ object BrinaColors {
     val Accent = Color(0xFFF28C38)
     val AccentLight = Color(0xFFF7A548)
     val AccentDark = Color(0xFFEC6F24)
-    val Surface = Color(0xFF1E1E1E)
+    val Surface = Color(0xFF1C1C1C)
     val SurfaceRaised = Color(0xFF2B2B2B)
-    val ChipSelected = Color(0x99594436)
+    val ChipSelected = Color(0x66000000)
     val Recording = Color(0xFFE5484D)
     val TextDim = Color(0xFF8C8C8C)
 }

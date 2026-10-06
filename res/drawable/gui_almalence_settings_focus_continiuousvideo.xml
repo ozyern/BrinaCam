@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Outline icon for the redesigned capture screen. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M5,15H3v4c0,1.1 0.9,2 2,2h4v-2H5v-4zM5,5h4V3H5c-1.1,0 -2,0.9 -2,2v4h2V5zM19,3h-4v2h4v4h2V5c0,-1.1 -0.9,-2 -2,-2zM19,19h-4v2h4c1.1,0 2,-0.9 2,-2v-4h-2v4z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M9,9h4.5a1,1 0,0 1,1,1v1l2,-1.5v5l-2,-1.5v1a1,1 0,0 1,-1,1H9a1,1 0,0 1,-1,-1v-4a1,1 0,0 1,1,-1z" />
-</vector>

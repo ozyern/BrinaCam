@@ -11,6 +11,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -51,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -67,7 +70,7 @@ import com.ozyern.brinacam.camera.CameraViewModel
 import com.ozyern.brinacam.camera.CaptureMode
 import kotlinx.coroutines.delay
 
-private val TopBarHeight = 72.dp
+internal val TopBarHeight = 76.dp
 
 @Composable
 fun CameraScreen(vm: CameraViewModel = viewModel()) {
@@ -268,9 +271,20 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         zoom = vm.zoomRatio,
                         minZoom = vm.minZoom,
                         maxZoom = vm.maxZoom,
+                        focalLength = vm.focalLength,
                         rotation = rotation,
+                        hdrAvailable = vm.hdrAvailable && vm.mode == CaptureMode.PHOTO,
+                        hdrOn = vm.hdrOn,
+                        filtersAvailable = vm.effects.size > 1 && vm.mode != CaptureMode.VIDEO,
+                        filterActive = filtersOpen || vm.effect != 0,
                         onZoom = vm::setZoom,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                        onHdr = vm::toggleHdr,
+                        onFilters = {
+                            val open = !filtersOpen
+                            closePanels()
+                            filtersOpen = open
+                        },
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
 
@@ -282,7 +296,8 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                 timerSeconds = vm.timerSeconds,
                 exposureValue = vm.exposureValue,
                 exposureEnabled = vm.exposureSupported,
-                gridOn = vm.gridOn,
+                focusLocked = vm.focusLocked,
+                quickMenuOpen = quickMenuOpen,
                 rotation = rotation,
                 onFlash = vm::cycleFlash,
                 onTimer = vm::cycleTimer,
@@ -291,7 +306,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     closePanels()
                     exposureOpen = open
                 },
-                onGrid = vm::toggleGrid,
+                onFocusLock = vm::toggleFocusLock,
                 onMore = {
                     val open = !quickMenuOpen
                     closePanels()
@@ -317,40 +332,6 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
 
             // Bottom controls.
             Column(Modifier.align(Alignment.BottomCenter)) {
-                AnimatedVisibility(
-                    visible = quickMenuOpen,
-                    enter = fadeIn() + slideInVertically { it / 3 },
-                    exit = fadeOut() + slideOutVertically { it / 3 },
-                ) {
-                    QuickMenu(
-                        items = quickMenuItems(
-                            aspectLabel = vm.aspect.label,
-                            gridOn = vm.gridOn,
-                            timerSeconds = vm.timerSeconds,
-                            hdrOn = vm.hdrOn,
-                            hdrAvailable = vm.hdrAvailable,
-                            mirrorOn = vm.mirrorFront,
-                            soundOn = vm.shutterSound,
-                            filtersAvailable = vm.effects.size > 1,
-                            onAspect = vm::cycleAspect,
-                            onGrid = vm::toggleGrid,
-                            onTimer = vm::cycleTimer,
-                            onHdr = vm::toggleHdr,
-                            onMirror = vm::toggleMirror,
-                            onSound = vm::toggleSound,
-                            onFilters = {
-                                quickMenuOpen = false
-                                filtersOpen = true
-                            },
-                            onAbout = {
-                                quickMenuOpen = false
-                                aboutOpen = true
-                            },
-                        ),
-                        rotation = rotation,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                    )
-                }
                 ShutterRow(
                     thumbnail = vm.thumbnail,
                     mode = vm.mode,
@@ -387,11 +368,49 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                 Spacer(Modifier.height(navBottom + 12.dp))
             }
 
+            // Quick settings card pops up over the bottom controls, like OnePlus.
+            AnimatedVisibility(
+                visible = quickMenuOpen,
+                enter = fadeIn(tween(160)) + scaleIn(initialScale = 0.9f, transformOrigin = TransformOrigin(0.85f, 1f)),
+                exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.9f, transformOrigin = TransformOrigin(0.85f, 1f)),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = navBottom + 28.dp),
+            ) {
+                QuickMenu(
+                    items = quickMenuItems(
+                        aspectLabel = vm.aspect.label,
+                        gridOn = vm.gridOn,
+                        timerSeconds = vm.timerSeconds,
+                        hdrOn = vm.hdrOn,
+                        hdrAvailable = vm.hdrAvailable,
+                        mirrorOn = vm.mirrorFront,
+                        soundOn = vm.shutterSound,
+                        filtersAvailable = vm.effects.size > 1,
+                        onAspect = vm::cycleAspect,
+                        onGrid = vm::toggleGrid,
+                        onTimer = vm::cycleTimer,
+                        onHdr = vm::toggleHdr,
+                        onMirror = vm::toggleMirror,
+                        onSound = vm::toggleSound,
+                        onFilters = {
+                            quickMenuOpen = false
+                            filtersOpen = true
+                        },
+                        onAbout = {
+                            quickMenuOpen = false
+                            aboutOpen = true
+                        },
+                    ),
+                    rotation = rotation,
+                )
+            }
+
             if (aboutOpen) {
                 AlertDialog(
                     onDismissRequest = { aboutOpen = false },
                     confirmButton = { TextButton(onClick = { aboutOpen = false }) { Text("OK") } },
-                    title = { Text("BrinaCam") },
+                    title = { Text("Settings") },
                     text = {
                         Text(
                             "Photos and videos are saved to DCIM/BrinaCam.\n\n" +

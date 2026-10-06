@@ -26,7 +26,7 @@ import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.HdrAuto
-import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.Palette
@@ -71,7 +71,7 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
         modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .glassOrFill(RoundedCornerShape(30.dp), Color(0xD9262626))
+            .frosted(RoundedCornerShape(30.dp), Color(0xCC2B2B2B))
             .padding(vertical = 18.dp, horizontal = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -90,18 +90,18 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                             Modifier
                                 .size(54.dp)
                                 .clip(CircleShape)
-                                .background(if (item.active) BrinaColors.Accent else Color(0xFF3A3A3A)),
+                                .background(if (item.active) BrinaColors.Accent else Color(0x33FFFFFF)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 item.icon,
                                 contentDescription = item.label,
-                                tint = if (item.active) Color.Black else Color.White,
+                                tint = Color.White,
                                 modifier = Modifier.size(24.dp).rotate(rotation),
                             )
                         }
                         Spacer(Modifier.height(6.dp))
-                        Text(item.label, color = Color.White, fontSize = 11.sp, maxLines = 1)
+                        Text(item.label, color = Color(0xCCFFFFFF), fontSize = 11.sp, maxLines = 1)
                     }
                 }
             }
@@ -134,7 +134,7 @@ fun quickMenuItems(
     QuickItem(Icons.Rounded.Flip, "Mirror", active = mirrorOn, onClick = onMirror),
     QuickItem(if (soundOn) Icons.Rounded.MusicNote else Icons.Rounded.MusicOff, "Sound", active = soundOn, onClick = onSound),
     QuickItem(Icons.Rounded.Palette, "Filters", active = false, enabled = filtersAvailable, onClick = onFilters),
-    QuickItem(Icons.Rounded.Info, "About", active = false, onClick = onAbout),
+    QuickItem(Icons.Rounded.Settings, "Settings", active = false, onClick = onAbout),
 )
 
 /** Exposure slider shown under the top bar when EV is tapped. */
@@ -151,7 +151,7 @@ fun ExposurePanel(
         modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .glassOrFill(RoundedCornerShape(24.dp), Color(0xB3262626))
+            .frosted(RoundedCornerShape(24.dp), Color(0xB31C1C1C))
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -189,8 +189,8 @@ fun EffectsRow(effects: List<ColorEffect>, selected: Int, onSelect: (Int) -> Uni
             Box(
                 Modifier
                     .height(36.dp)
-                    .glassOrFill(RoundedCornerShape(18.dp), if (isSelected) Color(0xE6262626) else Color(0x80000000))
                     .clip(RoundedCornerShape(18.dp))
+                    .background(if (isSelected) BrinaColors.Surface else Color(0x80000000))
                     .clickable { onSelect(effect.mode) }
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
