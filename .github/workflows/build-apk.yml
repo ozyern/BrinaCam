@@ -27,7 +27,7 @@ jobs:
           echo "NDK_ROOT=$HOME/android-ndk-r16b" >> $GITHUB_ENV
 
       - name: Build native libraries
-        run: $NDK_ROOT/ndk-build -j$(nproc) NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_ALLOW_MISSING_DEPS=true APP_DEPRECATED_HEADERS=true APP_CFLAGS="-include stdlib.h -include string.h" -k
+        run: $NDK_ROOT/ndk-build -j$(nproc) NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_ALLOW_MISSING_DEPS=true APP_DEPRECATED_HEADERS=true APP_CFLAGS="-include stdlib.h -include string.h -Ijni/include" -k
 
       # 64-bit libraries for devices without 32-bit support (e.g. Snapdragon 8 Gen 3 / Elite phones).
       - name: Build libjpeg-turbo (arm64-v8a)
@@ -56,19 +56,19 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
           ls build/outputs/apk/release/
-          cp build/outputs/apk/release/*arm64-v8a*.apk OpenCamera-redesign-arm64.apk
-          cp build/outputs/apk/release/*armeabi-v7a*.apk OpenCamera-redesign-armv7.apk
+          cp build/outputs/apk/release/*arm64-v8a*.apk EspressoCam-arm64.apk
+          cp build/outputs/apk/release/*armeabi-v7a*.apk EspressoCam-armv7.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OpenCamera-redesign-apk
-          path: OpenCamera-redesign-*.apk
+          name: EspressoCam-apk
+          path: EspressoCam-*.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: OpenCamera redesign build ${{ github.run_number }}
+          name: Espresso Cam build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: true
-          files: OpenCamera-redesign-*.apk
+          files: EspressoCam-*.apk

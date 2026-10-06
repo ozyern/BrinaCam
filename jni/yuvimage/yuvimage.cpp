@@ -20,6 +20,7 @@
 #include <string.h>
 #include <jni.h>
 #include <android/log.h>
+#include "ptrhandle.h"
 
 #include "YuvToJpegEncoderMT.h"
 #include "almashot.h"
@@ -38,7 +39,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_almalence_YuvImage_SaveJpegFreeOu
 {
 	jbyte* OutPic;
 
-	OutPic = (jbyte *)jout;
+	OutPic = (jbyte *)J2PTR(jout);
 
 	initStreamMethods(env);
 
@@ -76,7 +77,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_YuvImage_GetFrame
 		jobject thiz
 )
 {
-	return (jint)yuv;
+	return PTR2J(yuv);
 }
 
 extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_YuvImage_GetByteFrame
@@ -294,6 +295,6 @@ extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_AllocateMemoryForYU
 )
 {
 	unsigned char* yuv_mem = (unsigned char *)malloc (sx*sy+sx*((sy+1)/2));
-	return (jint)yuv_mem;
+	return PTR2J(yuv_mem);
 }
 

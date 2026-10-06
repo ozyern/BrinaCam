@@ -23,6 +23,7 @@ by Almalence Inc. All Rights Reserved.
 #include <android/log.h>
 
 #include "ImageConversionUtils.h"
+#include "ptrhandle.h"
 
 #define BMP_R(p)	((p) & 0xFF)
 #define BMP_G(p)	(((p)>>8) & 0xFF)
@@ -140,7 +141,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_almalence_util_ImageConversion_Transf
 	int rotate90
 )
 {
-	TransformNV21((unsigned char*)InPic, (unsigned char*)OutPic, sx, sy, NULL, flipLR, flipUD, rotate90);
+	TransformNV21((unsigned char*)J2PTR(InPic), (unsigned char*)J2PTR(OutPic), sx, sy, NULL, flipLR, flipUD, rotate90);
 }
 
 
@@ -175,7 +176,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_util_ImageConversion_JpegCo
 
 	env->ReleaseByteArrayElements(jdata, (jbyte*)data, JNI_ABORT);
 
-	return (jint)out;
+	return PTR2J(out);
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_almalence_util_ImageConversion_JpegConvertN
@@ -198,14 +199,14 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_util_ImageConversion_JpegCo
 
 	if (out != NULL)
 	{
-		if (JPEG2NV21(out, (unsigned char*)jpeg, jpeg_length, sx, sy, jrot, mirror, rotationDegree) == 0)
+		if (JPEG2NV21(out, (unsigned char*)J2PTR(jpeg), jpeg_length, sx, sy, jrot, mirror, rotationDegree) == 0)
 		{
 			free(out);
 			out = NULL;
 		}
 	}
 
-	return (jint)out;
+	return PTR2J(out);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_almalence_util_ImageConversion_convertNV21toGLN(
@@ -213,7 +214,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_almalence_util_ImageConversion_conver
 {
 	jbyte *cImageOut = env->GetByteArrayElements(aout, 0);
 
-	NV21_to_RGB_scaled_rotated((unsigned char*)ain, width, height, 0, 0, width, height, outWidth, outHeight, 4, (unsigned char*)cImageOut);
+	NV21_to_RGB_scaled_rotated((unsigned char*)J2PTR(ain), width, height, 0, 0, width, height, outWidth, outHeight, 4, (unsigned char*)cImageOut);
 
 	env->ReleaseByteArrayElements(aout, cImageOut, 0);
 }
@@ -246,7 +247,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_almalence_util_ImageConversion_resize
 		return;
 	}
 
-	JPEG2RGBA((unsigned char*)data_rgba, (unsigned char*)jpeg, jpeg_length);
+	JPEG2RGBA((unsigned char*)data_rgba, (unsigned char*)J2PTR(jpeg), jpeg_length);
 
 	unsigned char * rgb_bytes = (unsigned char*)env->GetByteArrayElements(rgb_out, 0);
 

@@ -3,8 +3,8 @@
     <string name="trial_left">%1$s mode free shots left: %2$d</string>
     <string name="trial_finished">Free %1$s shots exhausted, please unlock</string>
     <!-- -+-  -->
-    <string name="app_name">A Better Camera</string>
-    <string name="Pref_About">A Better Camera  v3.52\n(©) by Almalence Inc</string>
+    <string name="app_name">Espresso Cam</string>
+    <string name="Pref_About">Espresso Cam v3.52\nBased on A Better Camera (©) by Almalence Inc</string>
     <!--  -+- -->
     <!-- +++
     <string name="app_name">A Better Camera Unlocked</string>
@@ -76,8 +76,8 @@
     <string name="volumeBtnExpoCorrection">Exposure correction</string>
     <string name="volumeBtnNone">None</string>
     
-    <string name="raterMain">If you enjoy using A Better Camera, please take a moment to rate it.\n\nThanks for your support!</string>
-    <string name="raterRate">Rate A Better Camera</string>
+    <string name="raterMain">If you enjoy using Espresso Cam, please take a moment to rate it.\n\nThanks for your support!</string>
+    <string name="raterRate">Rate Espresso Cam</string>
     <string name="raterNo">No, thanks</string>
     
     <string name="raterSendReview"> We care about your opinion and want to make ABC better. Send your review directly to support.</string>

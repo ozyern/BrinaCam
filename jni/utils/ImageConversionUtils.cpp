@@ -28,6 +28,7 @@ by Almalence Inc. All Rights Reserved.
 #include <jni.h>
 
 #include "ImageConversionUtils.h"
+#include "ptrhandle.h"
 
 #define LOG_TAG "ImageConversion"
 #ifdef LOG_ON
@@ -943,7 +944,7 @@ extern "C" JNIEXPORT jintArray JNICALL Java_com_almalence_util_ImageConversion_N
 	LOGD("Memory alloc size = %d * %d", dstW, dstH);
 	pixels = (Uint32 *)env->GetIntArrayElements(jpixels, NULL);
 
-	NV21_to_RGB_scaled((Uint8 *)inptr, srcW, srcH, left, top, right - left, bottom - top, dstW, dstH, 4, (Uint8 *)pixels);
+	NV21_to_RGB_scaled((Uint8 *)J2PTR(inptr), srcW, srcH, left, top, right - left, bottom - top, dstW, dstH, 4, (Uint8 *)pixels);
 
 	env->ReleaseIntArrayElements(jpixels, (jint*)pixels, 0);
 

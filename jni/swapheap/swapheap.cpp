@@ -21,6 +21,7 @@ by Almalence Inc. All Rights Reserved.
 #include <jni.h>
 #include <pthread.h>
 #include <android/log.h>
+#include "ptrhandle.h"
 
 
 extern "C" {
@@ -48,7 +49,7 @@ JNIEXPORT jint JNICALL Java_com_almalence_SwapHeap_SwapToHeap
 
 	env->ReleaseByteArrayElements(jdata, (jbyte*)data, JNI_ABORT);
 
-	return (jint)heap;
+	return PTR2J(heap);
 }
 
 JNIEXPORT jint JNICALL Java_com_almalence_SwapHeap_SwapYuvToHeap
@@ -63,9 +64,9 @@ JNIEXPORT jint JNICALL Java_com_almalence_SwapHeap_SwapYuvToHeap
 
 	heap = (unsigned char *)malloc(jdata_length);
 	if (heap)
-		memcpy (heap, (unsigned char*)jdata, jdata_length);
+		memcpy (heap, (unsigned char*)J2PTR(jdata), jdata_length);
 
-	return (jint)heap;
+	return PTR2J(heap);
 }
 
 
@@ -82,7 +83,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_almalence_SwapHeap_CopyFromHeap
 
 	jdata = env->NewByteArray(jdata_length);
 
-	heap = (unsigned char *)jheap;
+	heap = (unsigned char *)J2PTR(jheap);
 
 	data = (unsigned char*)env->GetByteArrayElements(jdata, NULL);
 
@@ -103,7 +104,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_almalence_SwapHeap_SwapFromHeap
 {
 	jbyteArray jdata = Java_com_almalence_SwapHeap_CopyFromHeap(env, thiz, jheap, jdata_length);
 
-	free ((void*)jheap);
+	JFREE(jheap);
 
 	return jdata;
 }
@@ -115,7 +116,7 @@ JNIEXPORT jboolean JNICALL Java_com_almalence_SwapHeap_FreeFromHeap
 	jint jheap
 )
 {
-	free ((void*)jheap);
+	JFREE(jheap);
 
 	return 1;
 }

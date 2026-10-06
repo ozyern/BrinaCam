@@ -15,7 +15,7 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdk 24
         versionCode 147
-        versionName '3.52-redesign'
+        versionName '3.52-espresso'
     }
 
     sourceSets {
