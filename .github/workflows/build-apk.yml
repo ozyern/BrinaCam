@@ -27,7 +27,7 @@ jobs:
           echo "NDK_ROOT=$HOME/android-ndk-r16b" >> $GITHUB_ENV
 
       - name: Build native libraries
-        run: $NDK_ROOT/ndk-build -j$(nproc) NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_ALLOW_MISSING_DEPS=true
+        run: $NDK_ROOT/ndk-build -j$(nproc) NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_ALLOW_MISSING_DEPS=true APP_DEPRECATED_HEADERS=true APP_CFLAGS="-include stdlib.h -include string.h" -k
 
       - name: Build APK
         run: |
