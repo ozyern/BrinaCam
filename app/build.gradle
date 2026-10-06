@@ -1,0 +1,78 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+android {
+    namespace 'com.ozyern.brinacam'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.ozyern.brinacam'
+        minSdk 29
+        targetSdk 35
+        versionCode 200
+        versionName '2.0'
+    }
+
+    signingConfigs {
+        // Same key as earlier BrinaCam builds, so this installs as an update.
+        release {
+            storeFile rootProject.file('opencamera-dev.keystore')
+            storePassword 'android'
+            keyAlias 'opencamera'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures {
+        compose true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    def camerax = '1.4.2'
+    def compose = '1.10.3'
+
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.activity:activity-compose:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
+    implementation 'androidx.concurrent:concurrent-futures-ktx:1.2.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+
+    implementation "androidx.compose.ui:ui:$compose"
+    implementation "androidx.compose.foundation:foundation:$compose"
+    implementation 'androidx.compose.material3:material3:1.4.0'
+    implementation 'androidx.compose.material:material-icons-extended:1.7.8'
+
+    // Liquid-glass surfaces (https://github.com/Kyant0/AndroidLiquidGlass)
+    implementation 'io.github.kyant0:backdrop:1.0.6'
+
+    implementation "androidx.camera:camera-core:$camerax"
+    implementation "androidx.camera:camera-camera2:$camerax"
+    implementation "androidx.camera:camera-lifecycle:$camerax"
+    implementation "androidx.camera:camera-video:$camerax"
+    implementation "androidx.camera:camera-view:$camerax"
+    implementation "androidx.camera:camera-extensions:$camerax"
+}
