@@ -57,8 +57,8 @@ public class ImageConversion
 	
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("utils-jni");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("utils-jni");
 	}
 
 	public static native void resizeJpeg2RGBA(int jpeg, int jpeg_length, byte[] rgb_out,

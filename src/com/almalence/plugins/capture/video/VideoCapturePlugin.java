@@ -1400,7 +1400,8 @@ public class VideoCapturePlugin extends PluginCapture
 
 	private boolean modeDRO()
 	{
-		return (ModePreference.compareTo("0") == 0);
+		// Realtime DRO needs the 32-bit-only Almalence library.
+		return (ModePreference.compareTo("0") == 0) && com.almalence.util.NativeLibs.isAlmalibAvailable();
 	}
 
 	private boolean maxQuality()
@@ -1874,7 +1875,8 @@ public class VideoCapturePlugin extends PluginCapture
 		mainButtons.setVisibility(View.INVISIBLE);
 
 		// change shutter icon
-		pauseVideoButton.setVisibility(View.VISIBLE);
+		// Pausing joins clips with the native MP4 editor, which the 64-bit build lacks.
+		pauseVideoButton.setVisibility(com.almalence.util.NativeLibs.load("almalence-mp4editor") ? View.VISIBLE : View.GONE);
 		pauseVideoButton.setImageDrawable(ApplicationScreen.getAppResources().getDrawable(R.drawable.plugin_capture_video_pause));
 
 		ApplicationScreen.instance.setKeepScreenOn(true);

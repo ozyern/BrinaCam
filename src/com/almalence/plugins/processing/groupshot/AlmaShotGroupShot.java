@@ -117,8 +117,8 @@ public final class AlmaShotGroupShot
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("almalib");
-		System.loadLibrary("almashot-seamless");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("almalib");
+		com.almalence.util.NativeLibs.load("almashot-seamless");
 	}
 }

@@ -47,8 +47,8 @@ public final class AlmaShotHDR
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("almalib");
-		System.loadLibrary("almashot-hdr");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("almalib");
+		com.almalence.util.NativeLibs.load("almashot-hdr");
 	}
 }

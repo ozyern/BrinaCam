@@ -32,6 +32,6 @@ public final class SwapHeap
 
 	static
 	{
-		System.loadLibrary("swapheap");
+		com.almalence.util.NativeLibs.load("swapheap");
 	}
 }

@@ -32,8 +32,8 @@ public final class AlmaShotBestShot
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("almalib");
-		System.loadLibrary("bestshot");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("almalib");
+		com.almalence.util.NativeLibs.load("bestshot");
 	}
 }

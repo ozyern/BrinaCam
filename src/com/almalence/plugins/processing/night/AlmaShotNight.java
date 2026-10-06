@@ -38,8 +38,8 @@ public final class AlmaShotNight
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("almalib");
-		System.loadLibrary("almashot-night");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("almalib");
+		com.almalence.util.NativeLibs.load("almashot-night");
 	}
 }

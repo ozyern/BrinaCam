@@ -297,6 +297,6 @@ public class YuvImage
 
 	static
 	{
-		System.loadLibrary("yuvimage");
+		com.almalence.util.NativeLibs.load("yuvimage");
 	}
 }

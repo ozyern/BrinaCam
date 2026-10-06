@@ -87,6 +87,15 @@ public class CapturePlugin extends PluginCapture
 		}
 	}
 
+	// "0" = DRO on. DRO needs the 32-bit-only Almalence library, so it is
+	// forced off on 64-bit-only devices.
+	private static String readModePreference(SharedPreferences prefs)
+	{
+		if (!com.almalence.util.NativeLibs.isAlmalibAvailable())
+			return "1";
+		return prefs.getString("modeStandardPref", "1");
+	}
+
 	@Override
 	public void onCreate()
 	{
@@ -95,7 +104,7 @@ public class CapturePlugin extends PluginCapture
 		modeSwitcher = (Switch) inflator.inflate(R.layout.plugin_capture_standard_modeswitcher, null, false);
 
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
-		ModePreference = prefs.getString("modeStandardPref", "1");
+		ModePreference = readModePreference(prefs);
 		singleModeEV = ApplicationScreen.instance.getEVPref();
 		modeSwitcher.setTextOn("DRO On");
 		modeSwitcher.setTextOff("DRO Off");
@@ -158,7 +167,7 @@ public class CapturePlugin extends PluginCapture
 	{
 		// Get the xml/preferences.xml preferences
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
-		ModePreference = prefs.getString("modeStandardPref", "1");
+		ModePreference = readModePreference(prefs);
 		
 		captureRAW = prefs.getBoolean(ApplicationScreen.sCaptureRAWPref, false);
 		PluginManager.getInstance().setSwitchModeType(true);
@@ -207,7 +216,7 @@ public class CapturePlugin extends PluginCapture
 		params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
 		params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
 
-		if (!CameraController.isRemoteCamera()) {
+		if (!CameraController.isRemoteCamera() && com.almalence.util.NativeLibs.isAlmalibAvailable()) {
 			((RelativeLayout) ApplicationScreen.instance.findViewById(R.id.specialPluginsLayout3)).addView(this.modeSwitcher,
 					params);
 		}
@@ -232,14 +241,14 @@ public class CapturePlugin extends PluginCapture
 	public void onDefaultsSelect()
 	{
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
-		ModePreference = prefs.getString("modeStandardPref", "1");
+		ModePreference = readModePreference(prefs);
 	}
 
 	@Override
 	public void onShowPreferences()
 	{
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
-		ModePreference = prefs.getString("modeStandardPref", "1");
+		ModePreference = readModePreference(prefs);
 	}
 
 	protected int framesCaptured = 0;

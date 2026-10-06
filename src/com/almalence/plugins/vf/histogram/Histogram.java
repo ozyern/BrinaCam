@@ -28,6 +28,6 @@ public final class Histogram
 
 	static
 	{
-		System.loadLibrary("histogram");
+		com.almalence.util.NativeLibs.load("histogram");
 	}
 }

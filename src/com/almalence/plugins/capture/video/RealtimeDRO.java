@@ -4,9 +4,9 @@ public class RealtimeDRO
 {
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("almalib");
-		System.loadLibrary("almashot-dro");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("almalib");
+		com.almalence.util.NativeLibs.load("almashot-dro");
 	}
 
 	public static native int initialize(int output_width, int output_height);

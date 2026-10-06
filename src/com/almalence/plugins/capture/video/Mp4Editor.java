@@ -26,6 +26,6 @@ public final class Mp4Editor
 	
 	static
 	{
-		System.loadLibrary("almalence-mp4editor");
+		com.almalence.util.NativeLibs.load("almalence-mp4editor");
 	}
 }

@@ -102,7 +102,30 @@ public class ConfigParser
 			if (mode.equals(tmp.modeID))
 				return tmp;
 		}
+		// A mode hidden on this device (see needsAlmalib) falls back to the default one.
+		if (hiddenModeIDs.contains(mode) && !modes.isEmpty())
+			return getDefaultMode();
 		return null;
+	}
+
+	private final java.util.Set<String>	hiddenModeIDs	= new java.util.HashSet<String>();
+
+	// Plugins backed by the Almalence processing core, which only ships as a
+	// 32-bit library. Their modes are hidden on 64-bit-only devices.
+	private static final String[]		ALMALIB_PLUGINS	= { "com.almalence.plugins.hdrprocessing",
+			"com.almalence.plugins.nightprocessing", "com.almalence.plugins.preshotprocessing",
+			"com.almalence.plugins.multishotprocessing", "com.almalence.plugins.panoramaprocessing",
+			"com.almalence.plugins.bestshotprocessing", "com.almalence.plugins.preshotcapture",
+			"com.almalence.plugins.panoramacapture_augmented", "com.almalence.plugins.nightcapture" };
+
+	private static boolean needsAlmalib(Mode mode)
+	{
+		for (String plugin : ALMALIB_PLUGINS)
+		{
+			if (plugin.equals(mode.Processing) || plugin.equals(mode.Capture))
+				return true;
+		}
+		return false;
 	}
 
 	public List<Mode> getList()
@@ -112,7 +135,7 @@ public class ConfigParser
 
 	public Mode getDefaultMode()
 	{
-		if (defaultModeID.isEmpty())
+		if (defaultModeID.isEmpty() || hiddenModeIDs.contains(defaultModeID))
 			defaultModeID = modes.get(0).modeID;
 		return getMode(defaultModeID);
 	}
@@ -157,7 +180,10 @@ public class ConfigParser
 			if (name.equals("mode"))
 			{
 				Mode tmp = readMode(parser);
-				modes.add(tmp);
+				if (needsAlmalib(tmp) && !com.almalence.util.NativeLibs.isAlmalibAvailable())
+					hiddenModeIDs.add(tmp.modeID);
+				else
+					modes.add(tmp);
 			} else if (name.equals("defaultmode"))
 			{
 				defaultModeID = readDefaultMode(parser);

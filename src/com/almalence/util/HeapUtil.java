@@ -49,7 +49,7 @@ public class HeapUtil
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("utils-jni");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("utils-jni");
 	}
 }

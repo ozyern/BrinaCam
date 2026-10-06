@@ -53,7 +53,7 @@ public final class PreShot
 
 	static
 	{
-		System.loadLibrary("utils-image");
-		System.loadLibrary("preshot");
+		com.almalence.util.NativeLibs.load("utils-image");
+		com.almalence.util.NativeLibs.load("preshot");
 	}
 }

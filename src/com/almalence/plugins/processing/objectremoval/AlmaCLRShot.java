@@ -1323,8 +1323,8 @@
 //
 //	static
 //	{
-//		System.loadLibrary("utils-image");
-//		System.loadLibrary("almalib");
-//		System.loadLibrary("almashot-moving");
+//		com.almalence.util.NativeLibs.load("utils-image");
+//		com.almalence.util.NativeLibs.load("almalib");
+//		com.almalence.util.NativeLibs.load("almashot-moving");
 //	}
 //}

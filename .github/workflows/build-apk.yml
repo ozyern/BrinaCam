@@ -29,16 +29,40 @@ jobs:
       - name: Build native libraries
         run: $NDK_ROOT/ndk-build -j$(nproc) NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_ALLOW_MISSING_DEPS=true APP_DEPRECATED_HEADERS=true APP_CFLAGS="-include stdlib.h -include string.h" -k
 
+      # 64-bit libraries for devices without 32-bit support (e.g. Snapdragon 8 Gen 3 / Elite phones).
+      - name: Build libjpeg-turbo (arm64-v8a)
+        run: |
+          NDK=${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}
+          echo "NDK_LATEST=$NDK" >> $GITHUB_ENV
+          curl -sSfL -o turbo.tar.gz https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/2.1.5.1.tar.gz
+          tar xzf turbo.tar.gz
+          SRC=$PWD/libjpeg-turbo-2.1.5.1
+          cmake -S $SRC -B turbo-build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DWITH_TURBOJPEG=OFF \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake --build turbo-build --target jpeg-static
+          OUT=jni/prebuilt/arm64-v8a/libjpeg-turbo
+          mkdir -p $OUT/include
+          cp turbo-build/libjpeg.a $OUT/
+          cp $SRC/*.h turbo-build/*.h $OUT/include/
+
+      - name: Build native libraries (arm64-v8a)
+        run: $NDK_LATEST/ndk-build -j$(nproc) NDK_PROJECT_PATH=. NDK_OUT=obj-arm64 APP_BUILD_SCRIPT=jni/Android-arm64.mk NDK_APPLICATION_MK=jni/Application-arm64.mk
+
       - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
-          cp build/outputs/apk/release/*.apk OpenCamera-redesign.apk
+          ls build/outputs/apk/release/
+          cp build/outputs/apk/release/*arm64-v8a*.apk OpenCamera-redesign-arm64.apk
+          cp build/outputs/apk/release/*armeabi-v7a*.apk OpenCamera-redesign-armv7.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: OpenCamera-redesign-apk
-          path: OpenCamera-redesign.apk
+          path: OpenCamera-redesign-*.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -47,4 +71,4 @@ jobs:
           name: OpenCamera redesign build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: true
-          files: OpenCamera-redesign.apk
+          files: OpenCamera-redesign-*.apk

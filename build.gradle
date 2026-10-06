@@ -16,9 +16,6 @@ android {
         targetSdk 24
         versionCode 147
         versionName '3.52-redesign'
-        ndk {
-            abiFilters 'armeabi-v7a'
-        }
     }
 
     sourceSets {
@@ -28,6 +25,17 @@ android {
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
             jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    // One APK per ABI: 64-bit for phones without 32-bit support, and the 32-bit
+    // one which keeps every Almalence processing mode.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a'
+            universalApk false
         }
     }
 
