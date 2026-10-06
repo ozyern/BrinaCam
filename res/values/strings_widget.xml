@@ -15,7 +15,7 @@
 	<string name="widgetSettingsItem">Settings</string>
 	<string name="widgetHideSettingsText">Removing all Settings buttons will make unable to configure current launcher anymore!</string>
 	<string name="widgetAlert">Warning!</string>	
-	<string name="widgetShopText">To activate launcher you have to install Espresso Cam.</string>
+	<string name="widgetShopText">To activate launcher you have to install BrinaCam.</string>
 	<string name="widgetGoShopText">Google Play</string>
 	<string name="widgetActivation">Launcher activation</string>
 	
@@ -23,7 +23,7 @@
 	<string name="widgetSolidName">ABC Launcher Compact</string>
 	<string name="widgetFullSolidName">ABC Launcher Full</string>
 	
-	<string name="widgetLauncherTitle">Espresso Cam Launcher</string>
+	<string name="widgetLauncherTitle">BrinaCam Launcher</string>
 	<string name="widgetLauncherContent">To place the launcher on your home screen, choose an \"ABC Launcher Grid/Compact/Full\" from the Widget tab in your list of apps.</string>
 	
 	<string name="editorInstallText">Install Editor</string>

@@ -275,7 +275,9 @@ public class ConfigParser
 		}
 		else if (tag.equals("vf"))
 		{
-			if (id != null)
+			// The software-gyroscope level indicator runs on the 32-bit-only panorama library.
+			if (id != null && !(id.equals("com.almalence.plugins.gyrovf")
+					&& !com.almalence.util.NativeLibs.isAlmalibAvailable()))
 				mode.VF.add(id);
 		} else if (tag.equals("capture"))
 		{

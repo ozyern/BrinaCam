@@ -59,8 +59,8 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
           ls build/outputs/apk/release/
-          cp build/outputs/apk/release/*arm64-v8a*.apk EspressoCam-arm64.apk
-          cp build/outputs/apk/release/*armeabi-v7a*.apk EspressoCam-armv7.apk
+          cp build/outputs/apk/release/*arm64-v8a*.apk BrinaCam-arm64.apk
+          cp build/outputs/apk/release/*armeabi-v7a*.apk BrinaCam-armv7.apk
           cp build/outputs/apk/release/*x86_64*.apk smoke-test-x86_64.apk
 
       # Launch the 64-bit build on an emulator and keep the crash log and a screenshot.
@@ -83,16 +83,16 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: EspressoCam-apk
-          path: EspressoCam-*.apk
+          name: BrinaCam-apk
+          path: BrinaCam-*.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Espresso Cam build ${{ github.run_number }}
+          name: BrinaCam build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: true
           files: |
-            EspressoCam-*.apk
+            BrinaCam-*.apk
             smoke-test/*

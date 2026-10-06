@@ -139,7 +139,7 @@ public class GyroVFPlugin extends PluginViewfinder
 		if(mSurfacePreviewAugmented != null)
 			mSurfacePreviewAugmented.reset(this.pictureHeight, this.pictureWidth, this.viewAngleY);
 
-		if (!mPrefHardwareGyroscope)
+		if (!mPrefHardwareGyroscope && mVfGyroscope != null)
 		{
 			mVfGyroscope.SetFrameParameters(this.previewWidth, this.previewHeight, this.viewAngleX, this.viewAngleY);
 		}
@@ -173,9 +173,11 @@ public class GyroVFPlugin extends PluginViewfinder
 		try
 		{
 			mVfGyroscope = new VfGyroSensor(null);
-		} catch (Exception e)
+		} catch (Throwable e)
 		{
+			// UnsatisfiedLinkError when the native library is missing (64-bit build).
 			e.printStackTrace();
+			mVfGyroscope = null;
 		}
 		mSurfacePreviewAugmented = new AugmentedSurfaceView(this);
 		updatePreferences();
@@ -233,7 +235,7 @@ public class GyroVFPlugin extends PluginViewfinder
 		if (mGyroState == OFF)
 			return;
 
-		if (!this.mPrefHardwareGyroscope)
+		if (!this.mPrefHardwareGyroscope && this.mVfGyroscope != null)
 		{
 			this.mVfGyroscope.NewData(data);
 			if (mSurfacePreviewAugmented != null)
@@ -334,12 +336,8 @@ public class GyroVFPlugin extends PluginViewfinder
 				}
 			}
 
-			if (!mPrefHardwareGyroscope)
+			if (!mPrefHardwareGyroscope && mVfGyroscope != null)
 			{
-				if (mVfGyroscope == null)
-				{
-					mVfGyroscope = new VfGyroSensor(null);
-				}
 				mVfGyroscope.open();
 				mVfGyroscope.SetListener(mAugmentedListener);
 			}
