@@ -37,7 +37,7 @@
                     android:layout_alignParentRight="true"
                     android:layout_centerVertical="true"
                     android:layout_margin="10dp"
-                    android:background="@+drawable/plugin_vf_clearbutton_bg"
+                    android:background="@drawable/plugin_vf_clearbutton_bg"
                     android:minHeight="0dp"
                     android:onClick="onClick"
                     android:padding="7dp"

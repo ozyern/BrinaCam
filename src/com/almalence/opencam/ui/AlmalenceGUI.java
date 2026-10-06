@@ -87,6 +87,7 @@ import android.view.animation.TranslateAnimation;
 import android.widget.AbsListView;
 import android.widget.Button;
 import android.widget.GridView;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -1328,6 +1329,12 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 						.setOrientation(AlmalenceGUI.mDeviceOrientation);
 				((RotateImageView) guiView.findViewById(R.id.buttonSelectMode))
 						.setOrientation(AlmalenceGUI.mDeviceOrientation);
+				((RotateImageView) guiView.findViewById(R.id.buttonSwitchCamera))
+						.setOrientation(AlmalenceGUI.mDeviceOrientation);
+				((RotateImageView) guiView.findViewById(R.id.buttonOpenSettings))
+						.setOrientation(AlmalenceGUI.mDeviceOrientation);
+				((RotateImageView) guiView.findViewById(R.id.buttonQuickMenu))
+						.setOrientation(AlmalenceGUI.mDeviceOrientation);
 
 				final int degree = AlmalenceGUI.mDeviceOrientation >= 0 ? AlmalenceGUI.mDeviceOrientation % 360
 						: AlmalenceGUI.mDeviceOrientation % 360 + 360;
@@ -1476,7 +1483,9 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 	private void initShutterButton()
 	{
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
-		boolean switchShutterOn = prefs.getBoolean(MainScreen.sFastSwitchShutterOn, true);
+		// The redesigned UI switches photo/video from the mode strip, so the
+		// slide-to-switch shutter is no longer shown.
+		boolean switchShutterOn = false;
 		String modeID = ApplicationScreen.getPluginManager().getActiveModeID();
 
 		if (switchShutterOn)
@@ -1905,30 +1914,13 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 			}
 		} else
 		{
+			// Viewfinder keeps the camera's aspect ratio and sits right below
+			// the top bar, leaving the bottom area for the capture controls.
 			lp.width = previewSurfaceWidth;
-			lp.height = previewSurfaceHeight;
-			if (Math.abs(surfaceAspect - cameraAspect) > 0.05d)
-			{
-				if (surfaceAspect > cameraAspect && (Math.abs(1 - cameraAspect) > 0.05d))
-				{
-					int paramsLayoutHeight = (int) MainScreen.getAppResources()
-							.getDimension(R.dimen.paramsLayoutHeight);
-					// if wide-screen - decrease width of surface
-					lp.width = previewSurfaceWidth;
-
-					lp.height = (int) (screen_height - 2 * paramsLayoutHeight);
-					lp.topMargin = (int) (paramsLayoutHeight);
-				} else if (surfaceAspect > cameraAspect)
-				{
-					int paramsLayoutHeight = (int) MainScreen.getAppResources()
-							.getDimension(R.dimen.paramsLayoutHeight);
-					// if wide-screen - decrease width of surface
-					lp.width = previewSurfaceWidth;
-
-					lp.height = previewSurfaceWidth;
-					lp.topMargin = (int) (paramsLayoutHeight);
-				}
-			}
+			lp.height = Math.min(Math.round(previewSurfaceWidth * cameraAspect), previewSurfaceHeight);
+			int topBarHeight = (int) MainScreen.getAppResources().getDimension(R.dimen.oc_top_bar_height);
+			int freeSpace = previewSurfaceHeight - lp.height;
+			lp.topMargin = freeSpace >= topBarHeight ? topBarHeight : Math.max(0, freeSpace / 2);
 		}
 
 		Log.d("GUI", "setLayoutParams. width = " + lp.width + " height = " + lp.height);
@@ -3124,6 +3116,8 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 					ApplicationInterface.MSG_EV_CHANGED);
 		}
 
+		buildZoomChips();
+
 		if (shutterSwitch != null)
 		{
 			initShutterButton();
@@ -3199,6 +3193,7 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 		// create and fill drawing slider
 		initSettingsMenu(true);
 		initModeList();
+		buildModeCarousel();
 
 		Panel.OnPanelListener pListener = new OnPanelListener()
 		{
@@ -4800,6 +4795,251 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 		});
 	}
 
+	/***************************************************************************************
+	 * 
+	 * REDESIGNED CAPTURE SCREEN: mode strip, zoom presets, camera switch
+	 * 
+	 ***************************************************************************************/
+	private static final float[]	ZOOM_PRESETS	= { 1f, 2f, 4f, 8f };
+	private final List<TextView>	zoomChips		= new ArrayList<TextView>();
+	private float					selectedZoomPreset	= 1f;
+
+	private void switchToNextCamera()
+	{
+		// getNumberOfCameras() also counts the Sony remote camera slot.
+		if (!isCameraChangeEnabled || CameraController.getNumberOfCameras() < 3)
+		{
+			showToast(null, Toast.LENGTH_SHORT, Gravity.CENTER,
+					ApplicationScreen.getAppResources().getString(R.string.settings_not_available), true, false);
+			return;
+		}
+
+		View button = guiView.findViewById(R.id.buttonSwitchCamera);
+		RotateAnimation spin = new RotateAnimation(0, 180, Animation.RELATIVE_TO_SELF, 0.5f,
+				Animation.RELATIVE_TO_SELF, 0.5f);
+		spin.setDuration(300);
+		spin.setInterpolator(new DecelerateInterpolator());
+		button.startAnimation(spin);
+
+		setCameraMode((CameraController.getCameraIndex() + 1) % 2, true);
+	}
+
+	private String getModeDisplayName(Mode mode)
+	{
+		int id = ApplicationScreen.instance.getResources().getIdentifier(
+				CameraController.isUseSuperMode() ? mode.modeNameHAL : mode.modeName, "string",
+				ApplicationScreen.instance.getPackageName());
+		String name = id != 0 ? ApplicationScreen.getAppResources().getString(id) : mode.modeID;
+		return name.toUpperCase();
+	}
+
+	private void buildModeCarousel()
+	{
+		LinearLayout carousel = (LinearLayout) guiView.findViewById(R.id.modeCarousel);
+		if (carousel == null)
+			return;
+		carousel.removeAllViews();
+
+		final float density = getScreenDensity();
+		final int sidePadding = ApplicationScreen.instance.getResources().getDisplayMetrics().widthPixels / 2;
+		carousel.setPadding(sidePadding, 0, sidePadding, 0);
+
+		for (final View modeView : modeViews)
+		{
+			final String modeID = buttonModeViewAssoc.get(modeView);
+			Mode mode = ConfigParser.getInstance().getMode(modeID);
+			if (mode == null)
+				continue;
+
+			TextView item = new TextView(ApplicationScreen.instance);
+			item.setText(getModeDisplayName(mode));
+			item.setTag(modeID);
+			item.setTextSize(16);
+			item.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+			item.setGravity(Gravity.CENTER);
+			item.setSingleLine(true);
+			item.setPadding((int) (22 * density), 0, (int) (22 * density), 0);
+
+			LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+					(int) (44 * density));
+			lp.leftMargin = (int) (4 * density);
+			lp.rightMargin = (int) (4 * density);
+			item.setLayoutParams(lp);
+
+			item.setOnClickListener(new OnClickListener()
+			{
+				@Override
+				public void onClick(View v)
+				{
+					if (lockControls || settingsControlsVisible || quickControlsChangeVisible)
+						return;
+					if (modeSelectorVisible)
+						hideModeList();
+					if (modeID.equals(ApplicationScreen.getPluginManager().getActiveModeID()))
+						return;
+					changeMode(modeView);
+				}
+			});
+			carousel.addView(item);
+		}
+
+		highlightModeCarousel(ApplicationScreen.getPluginManager().getActiveModeID(), false);
+	}
+
+	private void highlightModeCarousel(String activeModeID, final boolean smooth)
+	{
+		LinearLayout carousel = (LinearLayout) guiView.findViewById(R.id.modeCarousel);
+		if (carousel == null || activeModeID == null)
+			return;
+
+		final int accent = ApplicationScreen.getAppResources().getColor(R.color.oc_accent);
+		final int inactive = ApplicationScreen.getAppResources().getColor(R.color.oc_text_primary);
+		View selected = null;
+		for (int i = 0; i < carousel.getChildCount(); i++)
+		{
+			TextView item = (TextView) carousel.getChildAt(i);
+			boolean isActive = activeModeID.equals(item.getTag());
+			item.setTextColor(isActive ? accent : inactive);
+			item.setBackgroundResource(isActive ? R.drawable.oc_mode_selected_bg : android.R.color.transparent);
+			if (isActive)
+				selected = item;
+		}
+
+		if (selected == null)
+			return;
+
+		final View target = selected;
+		final HorizontalScrollView scroll = (HorizontalScrollView) guiView.findViewById(R.id.modeCarouselScroll);
+		scroll.post(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				int x = target.getLeft() + target.getWidth() / 2 - scroll.getWidth() / 2;
+				if (smooth)
+					scroll.smoothScrollTo(x, 0);
+				else
+					scroll.scrollTo(x, 0);
+			}
+		});
+	}
+
+	private void buildZoomChips()
+	{
+		final LinearLayout chips = (LinearLayout) guiView.findViewById(R.id.zoomChipsLayout);
+		if (chips == null)
+			return;
+		chips.removeAllViews();
+		zoomChips.clear();
+
+		float maxRatio = getMaxZoomRatio();
+		if (!CameraController.isZoomSupported() || maxRatio < 1.5f)
+		{
+			chips.setVisibility(View.GONE);
+			return;
+		}
+
+		final float density = getScreenDensity();
+		final int size = (int) ApplicationScreen.getAppResources().getDimension(R.dimen.oc_zoom_chip);
+		for (final float preset : ZOOM_PRESETS)
+		{
+			if (preset > maxRatio + 0.01f)
+				break;
+
+			TextView chip = new TextView(ApplicationScreen.instance);
+			chip.setTag(Float.valueOf(preset));
+			chip.setGravity(Gravity.CENTER);
+			chip.setTextSize(13);
+			chip.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+			LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+			lp.leftMargin = (int) (6 * density);
+			lp.rightMargin = (int) (6 * density);
+			chip.setLayoutParams(lp);
+			chip.setOnClickListener(new OnClickListener()
+			{
+				@Override
+				public void onClick(View v)
+				{
+					if (lockControls)
+						return;
+					applyZoomRatio(preset);
+				}
+			});
+			chips.addView(chip);
+			zoomChips.add(chip);
+		}
+
+		selectedZoomPreset = 1f;
+		updateZoomChips();
+		chips.setVisibility(zoomChips.size() > 1 ? View.VISIBLE : View.GONE);
+		chips.bringToFront();
+	}
+
+	private void updateZoomChips()
+	{
+		int accent = ApplicationScreen.getAppResources().getColor(R.color.oc_accent);
+		for (TextView chip : zoomChips)
+		{
+			float preset = (Float) chip.getTag();
+			boolean selected = Math.abs(preset - selectedZoomPreset) < 0.01f;
+			String label = preset == (int) preset ? String.valueOf((int) preset) : String.valueOf(preset);
+			chip.setText(selected ? label + "\u00D7" : label);
+			chip.setTextColor(selected ? accent : Color.WHITE);
+			chip.setBackgroundResource(selected ? R.drawable.oc_zoom_chip_selected_bg : R.drawable.oc_zoom_chip_bg);
+		}
+	}
+
+	// Largest zoom factor of the current camera (1.0 means no zoom).
+	private float getMaxZoomRatio()
+	{
+		try
+		{
+			if (CameraController.isUseCamera2())
+				return CameraController.getMaxZoom();
+
+			android.hardware.Camera.Parameters cp = CameraController.getCameraParameters();
+			if (cp == null || !cp.isZoomSupported())
+				return 1f;
+			List<Integer> ratios = cp.getZoomRatios();
+			return ratios.get(ratios.size() - 1) / 100f;
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return 1f;
+		}
+	}
+
+	private void applyZoomRatio(float ratio)
+	{
+		try
+		{
+			if (CameraController.isUseCamera2())
+			{
+				CameraController.setZoom(Math.min(ratio, CameraController.getMaxZoom()));
+			} else
+			{
+				// Camera1 takes an index into the list of supported zoom ratios.
+				android.hardware.Camera.Parameters cp = CameraController.getCameraParameters();
+				if (cp == null || !cp.isZoomSupported())
+					return;
+				List<Integer> ratios = cp.getZoomRatios();
+				int target = (int) (ratio * 100);
+				int best = 0;
+				for (int i = 0; i < ratios.size(); i++)
+				{
+					if (Math.abs(ratios.get(i) - target) < Math.abs(ratios.get(best) - target))
+						best = i;
+				}
+				CameraController.setZoom(best);
+			}
+			selectedZoomPreset = ratio;
+			updateZoomChips();
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+
 	private void openMoreSettings()
 	{
 		MainScreen.getInstance().getCameraParametersBundle();
@@ -5460,6 +5700,28 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 			}
 
 			shutterButtonPressed();
+			break;
+
+		case R.id.buttonSwitchCamera:
+			if (quickControlsChangeVisible || settingsControlsVisible)
+				break;
+			switchToNextCamera();
+			break;
+
+		case R.id.buttonOpenSettings:
+			if (quickControlsChangeVisible || settingsControlsVisible)
+				break;
+			openMoreSettings();
+			break;
+
+		case R.id.buttonQuickMenu:
+			if (quickControlsChangeVisible)
+				break;
+			{
+				Panel panel = (Panel) guiView.findViewById(R.id.topPanel);
+				panel.setVisibility(View.VISIBLE);
+				panel.setOpen(!panel.isOpen(), true);
+			}
 			break;
 
 		case R.id.buttonGallery:
@@ -6819,6 +7081,7 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 		activeMode.findViewById(R.id.modeSelectLayout2).setBackgroundResource(R.drawable.underlayer);
 		v.findViewById(R.id.modeSelectLayout2).setBackgroundResource(R.drawable.thumbnail_background_selected_inner);
 		activeMode = (ViewGroup) v;
+		highlightModeCarousel(buttonModeViewAssoc.get(v), true);
 
 		hideModeList();
 
