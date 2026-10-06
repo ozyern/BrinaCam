@@ -68,7 +68,7 @@ public class OpenCameraSolidWidgetProvider extends AppWidgetProvider
 	        	}
 	        	else
 	        	{
-	        		modeIntent = context.getPackageManager().getLaunchIntentForPackage("com.almalence.opencam");
+	        		modeIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
 	        		if(modeIntent != null)
 		        	{
 		    	        modeIntent.putExtras(extras);

@@ -10,7 +10,7 @@ android {
     compileSdk 28
 
     defaultConfig {
-        applicationId 'com.almalence.opencam'
+        applicationId 'com.ozyern.brinacam'
         minSdk 14
         //noinspection ExpiredTargetSdkVersion
         targetSdk 24

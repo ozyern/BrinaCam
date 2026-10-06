@@ -105,7 +105,7 @@ public class OpenCameraWidgetConfigureActivity extends Activity implements View.
         
 //        Log.e("Widget", "Widget Configuration Activity onCreate");
         
-        if (!isInstalled("com.almalence.opencam") && !isInstalled("com.almalence.opencam_plus"))
+        if (!isInstalled(getPackageName()) && !isInstalled("com.almalence.opencam_plus"))
 		{
         	AlertDialog.Builder builder = new AlertDialog.Builder(this);
 

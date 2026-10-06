@@ -2,20 +2,20 @@
 # Installs the APK on the running emulator, opens the camera screen and saves
 # the crash log plus screenshots to smoke-test/.
 APK=$1
-PKG=com.almalence.opencam
+PKG=com.ozyern.brinacam
 OUT=smoke-test
 mkdir -p $OUT
 
 adb install -r -g "$APK"
 adb shell appops set $PKG MANAGE_EXTERNAL_STORAGE allow || true
 adb logcat -c
-adb shell am start -W -n $PKG/.MainScreen
+adb shell am start -W -n $PKG/com.almalence.opencam.MainScreen
 sleep 20
 adb exec-out screencap -p > $OUT/screen-1.png
 # Dismiss a first-run dialog if one is showing, then capture again.
 adb shell input keyevent KEYCODE_BACK
 sleep 3
-adb shell am start -W -n $PKG/.MainScreen
+adb shell am start -W -n $PKG/com.almalence.opencam.MainScreen
 sleep 10
 adb exec-out screencap -p > $OUT/screen-2.png
 
