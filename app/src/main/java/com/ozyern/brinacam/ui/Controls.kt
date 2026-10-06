@@ -158,7 +158,7 @@ fun TopBar(
                     color = Color(0xFF9A9A9A),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Top).padding(top = 9.dp),
+                    modifier = Modifier.offset(y = (-4).dp),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(

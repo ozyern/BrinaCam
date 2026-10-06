@@ -4,13 +4,16 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.view.OrientationEventListener
 import android.view.Surface
-import androidx.camera.view.PreviewView
+import androidx.activity.compose.BackHandler
+import androidx.camera.compose.CameraXViewfinder
+import androidx.camera.viewfinder.compose.MutableCoordinateTransformer
+import androidx.camera.viewfinder.core.ImplementationMode
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,9 +40,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -58,20 +59,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.ozyern.brinacam.camera.CameraEvent
+import com.ozyern.brinacam.camera.CameraUiState
 import com.ozyern.brinacam.camera.CameraViewModel
 import com.ozyern.brinacam.camera.CaptureMode
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 /*
  * Vertical layout measured from the OnePlus 13 camera (dp from the top of the screen):
@@ -83,60 +88,27 @@ private val TopControlsAboveViewfinder = 45.7.dp
 private val ShutterBelowFrame = 64.dp
 private val ModesBelowFrame = 157.6.dp
 
+/** Stateful entry point: wires the view model to the stateless screen. */
 @Composable
-fun CameraScreen(vm: CameraViewModel = viewModel()) {
-    val context = LocalContext.current
+fun CameraRoute(vm: CameraViewModel = viewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val density = LocalDensity.current
+    LaunchedEffect(lifecycleOwner) { vm.attach(lifecycleOwner) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    CameraScreen(state = state, onEvent = vm::onEvent)
+}
 
-    val previewView = remember {
-        PreviewView(context).apply {
-            // TextureView-backed so the glass controls can sample and refract the preview.
-            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-            scaleType = PreviewView.ScaleType.FILL_CENTER
-        }
-    }
-    LaunchedEffect(previewView) { vm.attach(lifecycleOwner, previewView) }
+@Composable
+fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val currentState by rememberUpdatedState(state)
 
-    // Icons turn with the phone while the layout stays portrait.
-    var iconTarget by remember { mutableFloatStateOf(0f) }
-    DisposableEffect(Unit) {
-        val listener = object : OrientationEventListener(context) {
-            override fun onOrientationChanged(degrees: Int) {
-                if (degrees == ORIENTATION_UNKNOWN) return
-                val snapped = when (degrees) {
-                    in 45..134 -> 90
-                    in 135..224 -> 180
-                    in 225..314 -> 270
-                    else -> 0
-                }
-                vm.setDeviceRotation(
-                    when (snapped) {
-                        90 -> Surface.ROTATION_270
-                        180 -> Surface.ROTATION_180
-                        270 -> Surface.ROTATION_90
-                        else -> Surface.ROTATION_0
-                    }
-                )
-                // Pick the equivalent angle nearest the current one so icons turn the short way.
-                val desired = -snapped.toFloat()
-                var best = desired
-                for (k in -2..2) {
-                    val candidate = desired + 360f * k
-                    if (kotlin.math.abs(candidate - iconTarget) < kotlin.math.abs(best - iconTarget)) best = candidate
-                }
-                iconTarget = best
-            }
-        }
-        listener.enable()
-        onDispose { listener.disable() }
-    }
-    val rotation by animateFloatAsState(iconTarget, tween(300), label = "iconRotation")
+    val rotation = rememberIconRotation { onEvent(CameraEvent.DeviceRotation(it)) }
 
     var quickMenuOpen by remember { mutableStateOf(false) }
     var exposureOpen by remember { mutableStateOf(false) }
     var filtersOpen by remember { mutableStateOf(false) }
-    var aboutOpen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
     var focusPoint by remember { mutableStateOf<Offset?>(null) }
     var focusKey by remember { mutableIntStateOf(0) }
 
@@ -145,6 +117,9 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
         exposureOpen = false
         filtersOpen = false
     }
+
+    // System back (and predictive back) closes an open panel before leaving the app.
+    BackHandler(enabled = quickMenuOpen || exposureOpen || filtersOpen) { closePanels() }
 
     // Hide the focus ring a few seconds after the last interaction.
     LaunchedEffect(focusKey) {
@@ -155,13 +130,14 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
     }
 
     val backdrop = rememberLayerBackdrop()
+    val coordinateTransformer = remember { MutableCoordinateTransformer() }
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val viewfinderTop = maxOf(ViewfinderTop, statusTop + 70.dp)
-            val viewfinderHeight = maxWidth * vm.aspect.heightOverWidth
+            val viewfinderHeight = maxWidth * state.settings.aspect.heightOverWidth
             // Bottom controls follow the 4:3 frame, but never run into the gesture bar.
             val frameBottom = viewfinderTop + maxWidth * (4f / 3f)
             val lowestShutter = maxHeight - navBottom - 12.dp - ModeStripHeight / 2 - (ModesBelowFrame - ShutterBelowFrame)
@@ -169,7 +145,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
             val modesCenter = shutterCenter + (ModesBelowFrame - ShutterBelowFrame)
             val topControlsCenter = viewfinderTop - TopControlsAboveViewfinder
 
-            // Everything the glass controls refract lives in this layer.
+            // Everything the frosted surfaces blur lives in this layer.
             Box(
                 Modifier
                     .fillMaxSize()
@@ -183,8 +159,16 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         .height(viewfinderHeight)
                         .clipToBounds(),
                 ) {
-                    AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-                    if (vm.gridOn) GridOverlay(Modifier.fillMaxSize())
+                    state.surfaceRequest?.let { request ->
+                        CameraXViewfinder(
+                            surfaceRequest = request,
+                            // Embedded (TextureView) so the preview can be sampled for the blur.
+                            implementationMode = ImplementationMode.EMBEDDED,
+                            coordinateTransformer = coordinateTransformer,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (state.settings.gridOn) GridOverlay(Modifier.fillMaxSize())
                 }
             }
 
@@ -202,7 +186,8 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                             } else {
                                 focusPoint = offset
                                 focusKey++
-                                vm.focusAt(offset.x, offset.y)
+                                val surface = with(coordinateTransformer) { offset.transform() }
+                                onEvent(CameraEvent.FocusAt(surface.x, surface.y))
                             }
                         }
                     }
@@ -213,14 +198,14 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         val pxPerStep = 18.dp.toPx()
                         detectVerticalDragGestures(
                             onDragStart = {
-                                startIndex = vm.exposureIndex
+                                startIndex = currentState.exposure.index
                                 travel = 0f
                             },
                         ) { change, dy ->
-                            if (currentFocus != null && vm.exposureSupported) {
+                            if (currentFocus != null && currentState.exposure.supported) {
                                 change.consume()
                                 travel += dy
-                                vm.setExposure(startIndex - (travel / pxPerStep).toInt())
+                                onEvent(CameraEvent.SetExposure(startIndex - (travel / pxPerStep).toInt()))
                                 focusKey++
                             }
                         }
@@ -232,11 +217,18 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                         detectHorizontalDragGestures(
                             onDragStart = { travel = 0f },
                             onDragEnd = {
-                                if (!vm.isRecording) {
-                                    val modes = vm.availableModes
-                                    val index = modes.indexOf(vm.mode)
-                                    if (travel < -threshold) modes.getOrNull(index + 1)?.let(vm::selectMode)
-                                    if (travel > threshold) modes.getOrNull(index - 1)?.let(vm::selectMode)
+                                val s = currentState
+                                if (!s.isRecording) {
+                                    val index = s.availableModes.indexOf(s.mode)
+                                    val next = when {
+                                        travel < -threshold -> s.availableModes.getOrNull(index + 1)
+                                        travel > threshold -> s.availableModes.getOrNull(index - 1)
+                                        else -> null
+                                    }
+                                    next?.let {
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onEvent(CameraEvent.SelectMode(it))
+                                    }
                                 }
                             },
                         ) { change, dx ->
@@ -253,7 +245,7 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                                 if (event.changes.count { it.pressed } >= 2) {
                                     val zoomChange = event.calculateZoom()
                                     if (zoomChange != 1f) {
-                                        vm.setZoom(vm.zoomRatio * zoomChange)
+                                        onEvent(CameraEvent.SetZoom(currentState.zoom.ratio * zoomChange))
                                         event.changes.forEach { it.consume() }
                                     }
                                 }
@@ -262,17 +254,18 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     },
             ) {
                 focusPoint?.let { point ->
-                    val fraction = if (vm.exposureMax > 0) vm.exposureIndex.toFloat() / vm.exposureMax else 0f
+                    val exposure = state.exposure
+                    val fraction = if (exposure.max > 0) exposure.index.toFloat() / exposure.max else 0f
                     FocusRing(point, focusKey, fraction)
                 }
 
-                if (vm.isRecording) {
-                    RecordingChip(vm.recordingSeconds, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
+                if (state.isRecording) {
+                    RecordingChip(state.recordingSeconds, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
                 }
 
-                if (vm.countdown > 0) {
+                if (state.countdown > 0) {
                     Text(
-                        vm.countdown.toString(),
+                        state.countdown.toString(),
                         color = Color.White,
                         fontSize = 96.sp,
                         fontWeight = FontWeight.Light,
@@ -281,21 +274,26 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                 }
 
                 Column(Modifier.align(Alignment.BottomCenter)) {
-                    AnimatedVisibility(visible = filtersOpen && vm.effects.isNotEmpty()) {
-                        EffectsRow(vm.effects, vm.effect, vm::selectEffect, Modifier.padding(bottom = 4.dp))
+                    AnimatedVisibility(visible = filtersOpen && state.effects.isNotEmpty()) {
+                        EffectsRow(
+                            state.effects,
+                            state.effect,
+                            { onEvent(CameraEvent.SelectEffect(it)) },
+                            Modifier.padding(bottom = 4.dp),
+                        )
                     }
                     ZoomControls(
-                        zoom = vm.zoomRatio,
-                        minZoom = vm.minZoom,
-                        maxZoom = vm.maxZoom,
-                        focalLength = vm.focalLength,
+                        zoom = state.zoom.ratio,
+                        minZoom = state.zoom.min,
+                        maxZoom = state.zoom.max,
+                        focalLength = state.zoom.focalLength,
                         rotation = rotation,
-                        hdrAvailable = vm.hdrAvailable && vm.mode == CaptureMode.PHOTO,
-                        hdrOn = vm.hdrOn,
-                        filtersAvailable = vm.effects.size > 1 && vm.mode != CaptureMode.VIDEO,
-                        filterActive = filtersOpen || vm.effect != 0,
-                        onZoom = vm::setZoom,
-                        onHdr = vm::toggleHdr,
+                        hdrAvailable = state.hdrAvailable && state.mode == CaptureMode.PHOTO,
+                        hdrOn = state.settings.hdrOn,
+                        filtersAvailable = state.effects.size > 1 && state.mode != CaptureMode.VIDEO,
+                        filterActive = filtersOpen || state.effect != 0,
+                        onZoom = { onEvent(CameraEvent.SetZoom(it)) },
+                        onHdr = { onEvent(CameraEvent.ToggleHdr) },
                         onFilters = {
                             val open = !filtersOpen
                             closePanels()
@@ -305,25 +303,25 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     )
                 }
 
-                CaptureFlash(vm.captureTick)
+                CaptureFlash(state.captureTick)
             }
 
             TopBar(
-                flash = vm.flash,
-                timerSeconds = vm.timerSeconds,
-                exposureValue = vm.exposureValue,
-                exposureEnabled = vm.exposureSupported,
-                focusLocked = vm.focusLocked,
+                flash = state.settings.flash,
+                timerSeconds = state.settings.timerSeconds,
+                exposureValue = state.exposure.value,
+                exposureEnabled = state.exposure.supported,
+                focusLocked = state.focusLocked,
                 quickMenuOpen = quickMenuOpen,
                 rotation = rotation,
-                onFlash = vm::cycleFlash,
-                onTimer = vm::cycleTimer,
+                onFlash = { onEvent(CameraEvent.CycleFlash) },
+                onTimer = { onEvent(CameraEvent.CycleTimer) },
                 onExposure = {
                     val open = !exposureOpen
                     closePanels()
                     exposureOpen = open
                 },
-                onFocusLock = vm::toggleFocusLock,
+                onFocusLock = { onEvent(CameraEvent.ToggleFocusLock) },
                 onMore = {
                     val open = !quickMenuOpen
                     closePanels()
@@ -339,44 +337,49 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                 modifier = Modifier.padding(top = viewfinderTop + 8.dp),
             ) {
                 ExposurePanel(
-                    index = vm.exposureIndex,
-                    min = vm.exposureMin,
-                    max = vm.exposureMax,
-                    value = vm.exposureValue,
-                    onChange = vm::setExposure,
+                    index = state.exposure.index,
+                    min = state.exposure.min,
+                    max = state.exposure.max,
+                    value = state.exposure.value,
+                    onChange = { onEvent(CameraEvent.SetExposure(it)) },
                 )
             }
 
             // Bottom controls.
             Column(Modifier.padding(top = shutterCenter - ShutterRowHeight / 2)) {
                 ShutterRow(
-                    thumbnail = vm.thumbnail,
-                    mode = vm.mode,
-                    isRecording = vm.isRecording,
+                    thumbnail = state.lastMedia?.thumbnail,
+                    mode = state.mode,
+                    isRecording = state.isRecording,
                     rotation = rotation,
                     onGallery = {
-                        vm.lastMedia?.let { (uri, mime) ->
+                        state.lastMedia?.let { media ->
                             val intent = Intent(Intent.ACTION_VIEW)
-                                .setDataAndType(uri, mime)
+                                .setDataAndType(media.uri, media.mimeType)
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             try {
                                 context.startActivity(intent)
                             } catch (e: ActivityNotFoundException) {
+                                // No gallery app installed.
                             }
                         }
                     },
                     onShutter = {
                         closePanels()
-                        vm.onShutter()
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onEvent(CameraEvent.Shutter)
                     },
-                    onSwitch = vm::switchLens,
+                    onSwitch = { onEvent(CameraEvent.SwitchLens) },
                 )
                 Spacer(Modifier.height(modesCenter - shutterCenter - ShutterRowHeight / 2 - ModeStripHeight / 2))
                 ModeStrip(
-                    modes = vm.availableModes,
-                    selected = vm.mode,
-                    enabled = !vm.isRecording,
-                    onSelect = vm::selectMode,
+                    modes = state.availableModes,
+                    selected = state.mode,
+                    enabled = !state.isRecording,
+                    onSelect = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onEvent(CameraEvent.SelectMode(it))
+                    },
                     onPhotoOptions = {
                         val open = !quickMenuOpen
                         closePanels()
@@ -404,50 +407,80 @@ fun CameraScreen(vm: CameraViewModel = viewModel()) {
                     slideOutVertically(tween(180, easing = FastOutLinearInEasing)) { it / 14 },
                 modifier = Modifier.padding(top = minOf(frameBottom - 68.6.dp, maxHeight - navBottom - 262.dp)),
             ) {
+                val settings = state.settings
                 QuickMenu(
                     items = quickMenuItems(
-                        aspectLabel = vm.aspect.label,
-                        gridOn = vm.gridOn,
-                        timerSeconds = vm.timerSeconds,
-                        hdrOn = vm.hdrOn,
-                        hdrAvailable = vm.hdrAvailable,
-                        mirrorOn = vm.mirrorFront,
-                        soundOn = vm.shutterSound,
-                        filtersAvailable = vm.effects.size > 1,
-                        onAspect = vm::cycleAspect,
-                        onGrid = vm::toggleGrid,
-                        onTimer = vm::cycleTimer,
-                        onHdr = vm::toggleHdr,
-                        onMirror = vm::toggleMirror,
-                        onSound = vm::toggleSound,
+                        aspectLabel = settings.aspect.label,
+                        gridOn = settings.gridOn,
+                        timerSeconds = settings.timerSeconds,
+                        hdrOn = settings.hdrOn,
+                        hdrAvailable = state.hdrAvailable,
+                        mirrorOn = settings.mirrorFront,
+                        soundOn = settings.shutterSound,
+                        filtersAvailable = state.effects.size > 1,
+                        onAspect = { onEvent(CameraEvent.CycleAspect) },
+                        onGrid = { onEvent(CameraEvent.ToggleGrid) },
+                        onTimer = { onEvent(CameraEvent.CycleTimer) },
+                        onHdr = { onEvent(CameraEvent.ToggleHdr) },
+                        onMirror = { onEvent(CameraEvent.ToggleMirror) },
+                        onSound = { onEvent(CameraEvent.ToggleSound) },
                         onFilters = {
                             quickMenuOpen = false
                             filtersOpen = true
                         },
                         onAbout = {
                             quickMenuOpen = false
-                            aboutOpen = true
+                            settingsOpen = true
                         },
                     ),
                     rotation = rotation,
                 )
             }
 
-            if (aboutOpen) {
-                AlertDialog(
-                    onDismissRequest = { aboutOpen = false },
-                    confirmButton = { TextButton(onClick = { aboutOpen = false }) { Text("OK") } },
-                    title = { Text("Settings") },
-                    text = {
-                        Text(
-                            "Photos and videos are saved to DCIM/BrinaCam.\n\n" +
-                                "Built with CameraX, Jetpack Compose and Kyant's Liquid Glass."
-                        )
-                    },
-                )
+            if (settingsOpen) {
+                SettingsSheet(state = state, onEvent = onEvent, onDismiss = { settingsOpen = false })
             }
         }
     }
+}
+
+/**
+ * Follows the phone's physical orientation: reports the matching surface rotation
+ * and returns an animated angle so icons turn upright while the layout stays portrait.
+ */
+@Composable
+private fun rememberIconRotation(onSurfaceRotation: (Int) -> Unit): Float {
+    val context = LocalContext.current
+    val currentCallback by rememberUpdatedState(onSurfaceRotation)
+    var target by remember { mutableFloatStateOf(0f) }
+    DisposableEffect(Unit) {
+        val listener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                val snapped = when (degrees) {
+                    in 45..134 -> 90
+                    in 135..224 -> 180
+                    in 225..314 -> 270
+                    else -> 0
+                }
+                currentCallback(
+                    when (snapped) {
+                        90 -> Surface.ROTATION_270
+                        180 -> Surface.ROTATION_180
+                        270 -> Surface.ROTATION_90
+                        else -> Surface.ROTATION_0
+                    }
+                )
+                // Pick the equivalent angle nearest the current one so icons turn the short way.
+                val desired = -snapped.toFloat()
+                target = (-2..2).map { desired + 360f * it }.minBy { abs(it - target) }
+            }
+        }
+        listener.enable()
+        onDispose { listener.disable() }
+    }
+    val rotation by animateFloatAsState(target, spring(dampingRatio = 0.8f, stiffness = 300f), label = "iconRotation")
+    return rotation
 }
 
 /** Brief dark blink over the viewfinder when a photo is taken. */

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -37,12 +38,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.ozyern.brinacam.camera.CameraViewModel
 import com.ozyern.brinacam.ui.BrinaCamTheme
 import com.ozyern.brinacam.ui.BrinaColors
-import com.ozyern.brinacam.ui.CameraScreen
+import com.ozyern.brinacam.ui.CameraRoute
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -54,6 +58,17 @@ class MainActivity : ComponentActivity() {
                 BrinaCamApp()
             }
         }
+    }
+
+    // Volume keys act as the shutter, like the stock camera.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
+            keyCode == KeyEvent.KEYCODE_CAMERA
+        ) {
+            if (event.repeatCount == 0) CameraViewModel.pressHardwareShutter()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }
 
@@ -74,7 +89,7 @@ private fun BrinaCamApp() {
     }
 
     if (cameraGranted) {
-        CameraScreen()
+        CameraRoute()
     } else {
         PermissionScreen(onAllow = { launcher.launch(permissions) })
     }
