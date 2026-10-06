@@ -1,0 +1,74 @@
+// Gradle build for the legacy Eclipse/ADT project layout.
+// Native libraries are built separately with ndk-build (see .github/workflows/build-apk.yml)
+// and picked up from libs/<abi>/.
+plugins {
+    id 'com.android.application' version '7.4.2'
+}
+
+android {
+    namespace 'com.almalence.opencam'
+    compileSdk 28
+
+    defaultConfig {
+        applicationId 'com.almalence.opencam'
+        minSdk 14
+        //noinspection ExpiredTargetSdkVersion
+        targetSdk 24
+        versionCode 147
+        versionName '3.52-redesign'
+        ndk {
+            abiFilters 'armeabi-v7a'
+        }
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    signingConfigs {
+        // Signed with a committed dev key so the APK installs straight from CI.
+        release {
+            storeFile file('opencamera-dev.keystore')
+            storePassword 'android'
+            keyAlias 'opencamera'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        encoding 'UTF-8'
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    useLibrary 'org.apache.http.legacy'
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation files('libs/xzing-2.1/core.jar')
+}

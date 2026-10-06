@@ -4,3 +4,8 @@
 /jni/almashot/armeabi-v7a/libalmalib.a
 /jni/almashot/x86/libalmalib.a
 /.settings
+/.gradle
+/build
+/local.properties
+/libs/armeabi-v7a
+/libs/x86
