@@ -75,6 +75,7 @@ import kotlin.math.sin
 
 private const val DEGREES_PER_STOP = 26f
 private val LN2 = ln(2f)
+val ZoomControlsHeight = 170.dp
 
 private fun log2(value: Float) = ln(value) / LN2
 
@@ -160,7 +161,7 @@ fun ZoomControls(
     Box(
         modifier
             .fillMaxWidth()
-            .height(170.dp)
+            .height(ZoomControlsHeight)
             .pointerInput(minZoom, maxZoom) {
                 if (!canZoom) return@pointerInput
                 val tracker = VelocityTracker()

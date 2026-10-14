@@ -3,6 +3,7 @@ package com.ozyern.brinacam.camera
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
+import android.graphics.ImageFormat
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
@@ -11,10 +12,12 @@ import android.media.AudioAttributes
 import android.media.MediaActionSound
 import android.media.SoundPool
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Rational
+import android.util.Size
 import android.view.Surface
 import android.widget.Toast
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -45,6 +48,7 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.concurrent.futures.await
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.viewModelScope
@@ -53,6 +57,7 @@ import com.ozyern.brinacam.data.CameraSettings
 import com.ozyern.brinacam.data.MediaRepository
 import com.ozyern.brinacam.data.SavedMedia
 import com.ozyern.brinacam.data.SettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -63,6 +68,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import kotlin.math.hypot
 
@@ -99,6 +105,8 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
+    private var masterCamera: MasterCameraController? = null
+    private var masterSurface: Surface? = null
     private var owner: LifecycleOwner? = null
     private var targetRotation = Surface.ROTATION_0
     private var timerJob: Job? = null
@@ -173,8 +181,25 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 updateSettings { it.copy(ultraHdr = !it.ultraHdr) }
                 if (s.mode != CaptureMode.VIDEO) bind()
             }
+            is CameraEvent.SetMasterIso -> {
+                val value = event.value.coerceIn(50, 6400)
+                _state.update { it.copy(masterIso = value) }
+                masterCamera?.setManual(value, s.masterExposureMs)
+            }
+            is CameraEvent.SetMasterExposureMs -> {
+                val value = event.value.coerceIn(1, 2000)
+                _state.update { it.copy(masterExposureMs = value) }
+                masterCamera?.setManual(s.masterIso, value)
+            }
+            CameraEvent.ToggleMasterRaw -> _state.update { it.copy(masterRawOn = !it.masterRawOn) }
+            is CameraEvent.MasterSurface -> {
+                masterSurface = event.surface
+                if (s.mode == CaptureMode.MASTER && event.surface != null) bind()
+            }
             CameraEvent.ToggleMirror -> updateSettings { it.copy(mirrorFront = !it.mirrorFront) }
             CameraEvent.ToggleSound -> updateSettings { it.copy(shutterSound = !it.shutterSound) }
+            CameraEvent.ToggleBurst -> updateSettings { it.copy(burstOn = !it.burstOn) }
+            CameraEvent.TogglePrivateMetadata -> updateSettings { it.copy(privateMetadata = !it.privateMetadata) }
             CameraEvent.ToggleFocusLock -> toggleFocusLock()
             is CameraEvent.SelectEffect -> {
                 if (event.effect == s.effect) return
@@ -213,6 +238,11 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(lensFacing = next) }
         refreshModes()
         bind()
+    }
+
+    private fun captureMaster() {
+        val controller = masterCamera ?: return
+        controller.capture(_state.value.masterRawOn)
     }
 
     // ---- Zoom, exposure, focus ------------------------------------------------------------
@@ -299,13 +329,22 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun takePhoto() {
-        val capture = imageCapture ?: return
         val s = _state.value
+        if (s.mode == CaptureMode.MASTER) {
+            captureMaster()
+            return
+        }
         _state.update { it.copy(captureTick = it.captureTick + 1) }
         if (s.settings.shutterSound) shutterPool.play(shutterSoundId, 1f, 1f, 1, 0, 1f)
 
+        capturePhoto(s, if (s.settings.burstOn && s.mode != CaptureMode.HIRES) 3 else 1)
+    }
+
+    private fun capturePhoto(settings: CameraUiState, remaining: Int) {
+        val capture = imageCapture ?: return
+
         val metadata = ImageCapture.Metadata().apply {
-            isReversedHorizontal = s.lensFacing == CameraSelector.LENS_FACING_FRONT && s.settings.mirrorFront
+            isReversedHorizontal = settings.lensFacing == CameraSelector.LENS_FACING_FRONT && settings.settings.mirrorFront
         }
         val options = ImageCapture.OutputFileOptions.Builder(
             getApplication<Application>().contentResolver,
@@ -315,7 +354,19 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
 
         capture.takePicture(options, mainExecutor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                output.savedUri?.let { showSaved(it, "image/jpeg") }
+                output.savedUri?.let { uri ->
+                    viewModelScope.launch(Dispatchers.IO) {
+                        writePhotoMetadata(uri, settings.settings.privateMetadata)
+                        withContext(Dispatchers.Main) {
+                            if (remaining > 1) {
+                                delay(120)
+                                capturePhoto(settings, remaining - 1)
+                            } else {
+                                showSaved(uri, "image/jpeg")
+                            }
+                        }
+                    }
+                }
             }
 
             override fun onError(exception: ImageCaptureException) {
@@ -323,6 +374,38 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 toast("Couldn't save photo")
             }
         })
+    }
+
+    private fun writePhotoMetadata(uri: Uri, privateMetadata: Boolean) {
+        runCatching {
+            val resolver = getApplication<Application>().contentResolver
+            resolver.openFileDescriptor(uri, "rw")?.use { descriptor ->
+                val exif = ExifInterface(descriptor.fileDescriptor)
+                exif.setAttribute(ExifInterface.TAG_MAKE, friendlyManufacturer())
+                exif.setAttribute(ExifInterface.TAG_MODEL, friendlyDeviceModel())
+                if (privateMetadata) {
+                    exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_ALTITUDE, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_ALTITUDE_REF, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_DATESTAMP, null)
+                    exif.setAttribute(ExifInterface.TAG_GPS_TIMESTAMP, null)
+                }
+                exif.saveAttributes()
+            }
+        }.onFailure { Log.w(TAG, "Couldn't update photo device metadata", it) }
+    }
+
+    private fun friendlyManufacturer(): String = when {
+        Build.MANUFACTURER.equals("oneplus", ignoreCase = true) -> "OnePlus"
+        else -> Build.MANUFACTURER.replaceFirstChar { it.uppercaseChar() }
+    }
+
+    private fun friendlyDeviceModel(): String = when (Build.MODEL.uppercase()) {
+        "CPH2649" -> "OnePlus 13"
+        else -> Build.MODEL
     }
 
     @SuppressLint("MissingPermission")
@@ -383,6 +466,19 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private fun hasExtension(selector: CameraSelector, extension: Int): Boolean =
         extensions?.let { runCatching { it.isExtensionAvailable(selector, extension) }.getOrDefault(false) } ?: false
 
+    private fun largestJpegSize(selector: CameraSelector): Size? = runCatching {
+        val info = Camera2CameraInfo.from(provider!!.getCameraInfo(selector))
+        val standard = info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            ?.getOutputSizes(ImageFormat.JPEG)
+            .orEmpty()
+        val maximum = info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
+            ?.getOutputSizes(ImageFormat.JPEG)
+            .orEmpty()
+        standard.asSequence()
+            .plus(maximum.asSequence())
+            .maxByOrNull { it.width.toLong() * it.height.toLong() }
+    }.getOrNull()
+
     private fun refreshModes() {
         val base = CameraSelector.Builder().requireLensFacing(_state.value.lensFacing).build()
         val modes = buildList {
@@ -391,6 +487,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
             add(CaptureMode.PHOTO)
             if (hasExtension(base, ExtensionMode.BOKEH)) add(CaptureMode.PORTRAIT)
             add(CaptureMode.HIRES)
+            add(CaptureMode.MASTER)
         }
         _state.update {
             it.copy(
@@ -406,6 +503,21 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         val provider = provider ?: return
         val owner = owner ?: return
         val s = _state.value
+
+        if (s.mode == CaptureMode.MASTER) {
+            provider.unbindAll()
+            val surface = masterSurface ?: return
+            masterCamera?.close()
+            masterCamera = MasterCameraController(
+                getApplication(),
+                onReady = { rawAvailable -> _state.update { it.copy(masterRawAvailable = rawAvailable) } },
+                onSaved = { uri, mime -> showSaved(uri, mime) },
+                onError = { message -> toast(message) },
+            ).also { it.start(surface, s.masterIso, s.masterExposureMs) }
+            return
+        }
+        masterCamera?.close()
+        masterCamera = null
 
         val base = CameraSelector.Builder().requireLensFacing(s.lensFacing).build()
         val extensionMode = when (s.mode) {
@@ -463,6 +575,18 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 .setFlashMode(imageFlashMode(s.settings.flash))
                 .setResolutionSelector(resolution.build())
                 .setTargetRotation(targetRotation)
+
+            if (s.mode == CaptureMode.HIRES) {
+                largestJpegSize(selector)?.let { maxJpeg ->
+                    resolution.setResolutionStrategy(
+                        ResolutionStrategy(
+                            maxJpeg,
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                        )
+                    )
+                    builder.setResolutionSelector(resolution.build())
+                }
+            }
 
             // Ultra HDR (JPEG_R) photos where the camera supports them.
             val ultraHdrAvailable = extensionMode == null && runCatching {

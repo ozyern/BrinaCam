@@ -36,6 +36,10 @@ data class CameraUiState(
     val settings: CameraSettings = CameraSettings(),
     val hdrAvailable: Boolean = false,
     val ultraHdrAvailable: Boolean = false,
+    val masterRawAvailable: Boolean = false,
+    val masterRawOn: Boolean = true,
+    val masterIso: Int = 100,
+    val masterExposureMs: Long = 10,
     val zoom: ZoomState = ZoomState(),
     val exposure: ExposureState = ExposureState(),
     val effects: List<ColorEffect> = emptyList(),
@@ -60,8 +64,14 @@ sealed interface CameraEvent {
     data object CycleAspect : CameraEvent
     data object ToggleHdr : CameraEvent
     data object ToggleUltraHdr : CameraEvent
+    data class SetMasterIso(val value: Int) : CameraEvent
+    data class SetMasterExposureMs(val value: Long) : CameraEvent
+    data object ToggleMasterRaw : CameraEvent
+    data class MasterSurface(val surface: android.view.Surface?) : CameraEvent
     data object ToggleMirror : CameraEvent
     data object ToggleSound : CameraEvent
+    data object ToggleBurst : CameraEvent
+    data object TogglePrivateMetadata : CameraEvent
     data object ToggleFocusLock : CameraEvent
     data class SelectEffect(val effect: Int) : CameraEvent
     data class SetZoom(val ratio: Float) : CameraEvent

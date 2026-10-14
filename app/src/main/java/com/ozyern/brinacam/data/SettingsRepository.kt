@@ -24,6 +24,8 @@ data class CameraSettings(
     val ultraHdr: Boolean = true,
     val mirrorFront: Boolean = true,
     val shutterSound: Boolean = true,
+    val burstOn: Boolean = false,
+    val privateMetadata: Boolean = true,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -39,6 +41,8 @@ class SettingsRepository(private val context: Context) {
         val ultraHdr = booleanPreferencesKey("ultra_hdr")
         val mirror = booleanPreferencesKey("mirror")
         val sound = booleanPreferencesKey("sound")
+        val burst = booleanPreferencesKey("burst")
+        val privateMetadata = booleanPreferencesKey("private_metadata")
     }
 
     val settings: Flow<CameraSettings> = context.dataStore.data.map { prefs ->
@@ -52,6 +56,8 @@ class SettingsRepository(private val context: Context) {
             ultraHdr = prefs[Keys.ultraHdr] ?: defaults.ultraHdr,
             mirrorFront = prefs[Keys.mirror] ?: defaults.mirrorFront,
             shutterSound = prefs[Keys.sound] ?: defaults.shutterSound,
+            burstOn = prefs[Keys.burst] ?: defaults.burstOn,
+            privateMetadata = prefs[Keys.privateMetadata] ?: defaults.privateMetadata,
         )
     }
 
@@ -67,6 +73,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.ultraHdr] = settings.ultraHdr
             prefs[Keys.mirror] = settings.mirrorFront
             prefs[Keys.sound] = settings.shutterSound
+            prefs[Keys.burst] = settings.burstOn
+            prefs[Keys.privateMetadata] = settings.privateMetadata
         }
     }
 

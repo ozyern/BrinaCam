@@ -4,8 +4,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.view.OrientationEventListener
 import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.activity.compose.BackHandler
 import androidx.camera.compose.CameraXViewfinder
+import androidx.camera.core.CameraSelector
 import androidx.camera.viewfinder.compose.MutableCoordinateTransformer
 import androidx.camera.viewfinder.core.ImplementationMode
 import androidx.compose.animation.AnimatedVisibility
@@ -22,6 +25,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
@@ -39,8 +43,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -66,6 +74,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -138,6 +147,7 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val viewfinderTop = maxOf(ViewfinderTop, statusTop + 70.dp)
             val viewfinderHeight = maxWidth * state.settings.aspect.heightOverWidth
+            val zoomControlsTop = viewfinderTop + maxWidth * (4f / 3f) - ZoomControlsHeight
             // Bottom controls follow the 4:3 frame, but never run into the gesture bar.
             val frameBottom = viewfinderTop + maxWidth * (4f / 3f)
             val lowestShutter = maxHeight - navBottom - 12.dp - ModeStripHeight / 2 - (ModesBelowFrame - ShutterBelowFrame)
@@ -159,14 +169,21 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                         .height(viewfinderHeight)
                         .clipToBounds(),
                 ) {
-                    state.surfaceRequest?.let { request ->
-                        CameraXViewfinder(
-                            surfaceRequest = request,
-                            // Embedded (TextureView) so the preview can be sampled for the blur.
-                            implementationMode = ImplementationMode.EMBEDDED,
-                            coordinateTransformer = coordinateTransformer,
+                    if (state.mode == CaptureMode.MASTER) {
+                        MasterPreviewSurface(
+                            onSurface = { onEvent(CameraEvent.MasterSurface(it)) },
                             modifier = Modifier.fillMaxSize(),
                         )
+                    } else {
+                        state.surfaceRequest?.let { request ->
+                            CameraXViewfinder(
+                                surfaceRequest = request,
+                                // Embedded (TextureView) so the preview can be sampled for the blur.
+                                implementationMode = ImplementationMode.EMBEDDED,
+                                coordinateTransformer = coordinateTransformer,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                     if (state.settings.gridOn) GridOverlay(Modifier.fillMaxSize())
                 }
@@ -273,15 +290,19 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                     )
                 }
 
-                Column(Modifier.align(Alignment.BottomCenter)) {
-                    AnimatedVisibility(visible = filtersOpen && state.effects.isNotEmpty()) {
-                        EffectsRow(
-                            state.effects,
-                            state.effect,
-                            { onEvent(CameraEvent.SelectEffect(it)) },
-                            Modifier.padding(bottom = 4.dp),
-                        )
-                    }
+                CaptureFlash(state.captureTick)
+            }
+
+            Column(Modifier.padding(top = zoomControlsTop)) {
+                AnimatedVisibility(visible = filtersOpen && state.effects.isNotEmpty()) {
+                    EffectsRow(
+                        state.effects,
+                        state.effect,
+                        { onEvent(CameraEvent.SelectEffect(it)) },
+                        Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                if (state.lensFacing == CameraSelector.LENS_FACING_BACK) {
                     ZoomControls(
                         zoom = state.zoom.ratio,
                         minZoom = state.zoom.min,
@@ -299,11 +320,8 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                             closePanels()
                             filtersOpen = open
                         },
-                        modifier = Modifier.padding(bottom = 1.dp),
                     )
                 }
-
-                CaptureFlash(state.captureTick)
             }
 
             TopBar(
@@ -342,6 +360,14 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                     max = state.exposure.max,
                     value = state.exposure.value,
                     onChange = { onEvent(CameraEvent.SetExposure(it)) },
+                )
+            }
+
+            if (state.mode == CaptureMode.MASTER) {
+                MasterControls(
+                    state = state,
+                    onEvent = onEvent,
+                    modifier = Modifier.padding(top = viewfinderTop + 8.dp),
                 )
             }
 
@@ -441,6 +467,73 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                 SettingsSheet(state = state, onEvent = onEvent, onDismiss = { settingsOpen = false })
             }
         }
+    }
+}
+
+@Composable
+private fun MasterPreviewSurface(onSurface: (Surface?) -> Unit, modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { context ->
+            SurfaceView(context).also { view ->
+                view.holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) {
+                        onSurface(holder.surface)
+                    }
+
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                        onSurface(holder.surface)
+                    }
+
+                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                        onSurface(null)
+                    }
+                })
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun MasterControls(state: CameraUiState, onEvent: (CameraEvent) -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .frosted(RoundedCornerShape(22.dp), Color(0xB31C1C1C))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ISO ${state.masterIso}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Slider(
+                value = state.masterIso.toFloat(),
+                onValueChange = { onEvent(CameraEvent.SetMasterIso(it.toInt())) },
+                valueRange = 50f..6400f,
+                steps = 6,
+                colors = SliderDefaults.colors(thumbColor = BrinaColors.Accent, activeTrackColor = BrinaColors.Accent),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${state.masterExposureMs} ms", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Slider(
+                value = state.masterExposureMs.toFloat(),
+                onValueChange = { onEvent(CameraEvent.SetMasterExposureMs(it.toLong())) },
+                valueRange = 1f..2000f,
+                steps = 19,
+                colors = SliderDefaults.colors(thumbColor = BrinaColors.Accent, activeTrackColor = BrinaColors.Accent),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            if (state.masterRawAvailable) "RAW / DNG ${if (state.masterRawOn) "ON" else "OFF"}" else "RAW unavailable",
+            color = if (state.masterRawAvailable && state.masterRawOn) BrinaColors.Accent else BrinaColors.TextDim,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clickable(enabled = state.masterRawAvailable) { onEvent(CameraEvent.ToggleMasterRaw) }
+                .padding(vertical = 4.dp),
+        )
     }
 }
 

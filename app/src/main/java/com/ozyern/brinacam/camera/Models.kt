@@ -8,6 +8,7 @@ enum class CaptureMode(val label: String) {
     PHOTO("PHOTO"),
     PORTRAIT("PORTRAIT"),
     HIRES("HI-RES"),
+    MASTER("MASTER"),
 }
 
 enum class FlashSetting { OFF, AUTO, ON }

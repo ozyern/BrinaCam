@@ -12,7 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.CenterFocusWeak
 import androidx.compose.material.icons.rounded.FlashAuto
 import androidx.compose.material.icons.rounded.FlashOff
 import androidx.compose.material.icons.rounded.FlashOn
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Timer10
 import androidx.compose.material.icons.rounded.Timer3
@@ -77,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import com.ozyern.brinacam.camera.CaptureMode
 import com.ozyern.brinacam.camera.FlashSetting
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -93,6 +95,7 @@ fun RoundButton(
             .size(size.dp)
             .clip(CircleShape)
             .background(color)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
@@ -135,6 +138,7 @@ fun TopBar(
                 .height(ControlHeight)
                 .clip(RoundedCornerShape(18.dp))
                 .background(BrinaColors.Surface)
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
                 .padding(start = 6.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -253,6 +257,7 @@ fun ShutterRow(
                     .rotate(rotation)
                     .clip(RoundedCornerShape(8.dp))
                     .background(BrinaColors.Surface)
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                     .clickable(onClick = onGallery)
                     .semantics { contentDescription = "Gallery" },
             ) {
@@ -262,6 +267,13 @@ fun ShutterRow(
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.size(45.5.dp),
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.PhotoLibrary,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.72f),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -377,17 +389,26 @@ fun ModeStrip(
             .height(ModeStripHeight)
             .onSizeChanged { width = it.width }
             .pointerInput(modes, selected, enabled) {
-                var travel = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { travel = 0f },
+                var travelX = 0f
+                var travelY = 0f
+                detectDragGestures(
+                    onDragStart = {
+                        travelX = 0f
+                        travelY = 0f
+                    },
                     onDragEnd = {
                         val index = modes.indexOf(selected)
-                        if (enabled && travel < -threshold) modes.getOrNull(index + 1)?.let(onSelect)
-                        if (enabled && travel > threshold) modes.getOrNull(index - 1)?.let(onSelect)
+                        if (enabled && selected == CaptureMode.PHOTO && travelY < -threshold) {
+                            onPhotoOptions()
+                        } else if (enabled && abs(travelY) < threshold) {
+                            if (travelX < -threshold) modes.getOrNull(index + 1)?.let(onSelect)
+                            if (travelX > threshold) modes.getOrNull(index - 1)?.let(onSelect)
+                        }
                     },
-                ) { change, dx ->
+                ) { change, dragAmount ->
                     change.consume()
-                    travel += dx
+                    travelX += dragAmount.x
+                    travelY += dragAmount.y
                 }
             }
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

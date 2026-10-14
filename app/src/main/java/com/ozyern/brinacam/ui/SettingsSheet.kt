@@ -88,6 +88,18 @@ fun SettingsSheet(state: CameraUiState, onEvent: (CameraEvent) -> Unit, onDismis
                 checked = settings.shutterSound,
                 onToggle = { onEvent(CameraEvent.ToggleSound) },
             )
+            SettingSwitch(
+                title = "Burst photos",
+                subtitle = "Capture three photos with one press",
+                checked = settings.burstOn,
+                onToggle = { onEvent(CameraEvent.ToggleBurst) },
+            )
+            SettingSwitch(
+                title = "Private photo metadata",
+                subtitle = "Remove location data while keeping the device name",
+                checked = settings.privateMetadata,
+                onToggle = { onEvent(CameraEvent.TogglePrivateMetadata) },
+            )
             HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), color = Color(0xFF2E2E2E))
             Text(
                 "Saved to ${MediaRepository.SAVE_DIR}",

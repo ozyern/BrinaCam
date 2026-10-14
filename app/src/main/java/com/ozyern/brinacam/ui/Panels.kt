@@ -85,8 +85,14 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
         modifier
             .fillMaxWidth()
             .padding(horizontal = 13.7.dp)
-            .frosted(RoundedCornerShape(28.dp), Color(0xD92A2A2A), blurRadius = 30.dp)
-            .border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(28.dp))
+            .frosted(RoundedCornerShape(30.dp), Color(0xB8141416), blurRadius = 42.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xB82E2E31), Color(0xE0101012)),
+                ),
+                RoundedCornerShape(30.dp),
+            )
+            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(30.dp))
             .padding(start = 13.8.dp, end = 13.8.dp, top = 27.5.dp, bottom = 22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -117,16 +123,29 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                     ) {
                         Box(
                             Modifier
-                                .size(61.dp)
+                                .size(64.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (item.active) {
-                                        Brush.verticalGradient(listOf(Color(0xFFFF7A0A), Color(0xFFFF9A3C)))
+                                        Brush.radialGradient(
+                                            listOf(Color(0xFFFFB13B), Color(0xFFFF7A00), Color(0xFFE85D00)),
+                                        )
                                     } else {
-                                        Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x24FFFFFF)))
+                                        Brush.radialGradient(
+                                            listOf(Color(0x5CFFFFFF), Color(0x2FFFFFFF), Color(0x18FFFFFF)),
+                                        )
                                     }
                                 )
-                                .border(1.dp, if (item.active) Color.Transparent else Color(0x1FFFFFFF), CircleShape)
+                                .border(
+                                    1.dp,
+                                    if (item.active) Color(0x55FFD39A) else Color(0x35FFFFFF),
+                                    CircleShape,
+                                )
+                                .graphicsLayer {
+                                    shadowElevation = if (item.active) 10.dp.toPx() else 3.dp.toPx()
+                                    shape = CircleShape
+                                    clip = false
+                                }
                                 .rotate(rotation),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -136,11 +155,10 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                         Text(
                             item.label,
                             color = Color.White,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
-                            overflow = TextOverflow.Clip,
-                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
