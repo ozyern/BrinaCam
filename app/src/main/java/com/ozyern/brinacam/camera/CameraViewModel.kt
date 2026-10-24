@@ -471,23 +471,26 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         val standard = info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
             ?.getOutputSizes(ImageFormat.JPEG)
             .orEmpty()
-        val maximum = info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
-            ?.getOutputSizes(ImageFormat.JPEG)
-            .orEmpty()
-        standard.asSequence()
-            .plus(maximum.asSequence())
+        val maximum = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
+                ?.getOutputSizes(ImageFormat.JPEG)
+                .orEmpty()
+        } else {
+            emptyArray()
+        }
+        (standard.asSequence() + maximum.asSequence())
             .maxByOrNull { it.width.toLong() * it.height.toLong() }
     }.getOrNull()
 
     private fun refreshModes() {
         val base = CameraSelector.Builder().requireLensFacing(_state.value.lensFacing).build()
         val modes = buildList {
-            if (hasExtension(base, ExtensionMode.NIGHT)) add(CaptureMode.NIGHT)
+            add(CaptureMode.MASTER)
             add(CaptureMode.VIDEO)
             add(CaptureMode.PHOTO)
-            if (hasExtension(base, ExtensionMode.BOKEH)) add(CaptureMode.PORTRAIT)
             add(CaptureMode.HIRES)
-            add(CaptureMode.MASTER)
+            if (hasExtension(base, ExtensionMode.BOKEH)) add(CaptureMode.PORTRAIT)
+            if (hasExtension(base, ExtensionMode.NIGHT)) add(CaptureMode.NIGHT)
         }
         _state.update {
             it.copy(
@@ -565,27 +568,65 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 group.addUseCase(it)
             }
         } else {
-            val resolution = ResolutionSelector.Builder().setAspectRatioStrategy(ratioStrategy)
-            if (s.mode == CaptureMode.HIRES) {
-                resolution.setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
-                resolution.setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
-            }
             val builder = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                 .setFlashMode(imageFlashMode(s.settings.flash))
-                .setResolutionSelector(resolution.build())
                 .setTargetRotation(targetRotation)
 
             if (s.mode == CaptureMode.HIRES) {
-                largestJpegSize(selector)?.let { maxJpeg ->
-                    resolution.setResolutionStrategy(
+                val maxJpeg = largestJpegSize(selector)
+                val hiResResolution = ResolutionSelector.Builder()
+                    .setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
+
+                if (maxJpeg != null) {
+                    hiResResolution.setResolutionStrategy(
                         ResolutionStrategy(
                             maxJpeg,
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
                         )
                     )
-                    builder.setResolutionSelector(resolution.build())
+                    // Ensure aspect ratio strategy accommodates full sensor dimension (typically 4:3)
+                    val targetAspect = if (maxJpeg.width * 9 == maxJpeg.height * 16 || maxJpeg.height * 9 == maxJpeg.width * 16) {
+                        AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+                    } else {
+                        AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
+                    }
+                    hiResResolution.setAspectRatioStrategy(targetAspect)
+                } else {
+                    hiResResolution.setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                    hiResResolution.setAspectRatioStrategy(ratioStrategy)
                 }
+                builder.setResolutionSelector(hiResResolution.build())
+
+                // Enable Camera2 maximum resolution sensor mode (remosaic / unbinned 50MP / 200MP)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Camera2Interop.Extender(builder)
+                        .setCaptureRequestOption(
+                            CaptureRequest.SENSOR_PIXEL_MODE,
+                            CameraMetadata.SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION,
+                        )
+                }
+
+                // Activate vendor remosaic / ultra-high-resolution keys if supported (OnePlus / Qualcomm / MediaTek)
+                val vendorKeys = listOf(
+                    "org.codeaurora.qcamera3.remosaic.modes",
+                    "com.oplus.camera.high.resolution.mode",
+                    "com.mediatek.control.capture.remosaicenable",
+                )
+                for (vendorName in vendorKeys) {
+                    runCatching {
+                        val constructor = CaptureRequest.Key::class.java.getDeclaredConstructor(String::class.java, Class::class.java)
+                        constructor.isAccessible = true
+                        @Suppress("UNCHECKED_CAST")
+                        val key = constructor.newInstance(vendorName, Int::class.javaObjectType) as CaptureRequest.Key<Any>
+                        Camera2Interop.Extender(builder).setCaptureRequestOption(key, 1)
+                    }
+                }
+            } else {
+                val resolution = ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(ratioStrategy)
+                    .build()
+                builder.setResolutionSelector(resolution)
             }
 
             // Ultra HDR (JPEG_R) photos where the camera supports them.

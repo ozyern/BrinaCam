@@ -84,17 +84,12 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 13.7.dp)
-            .frosted(RoundedCornerShape(30.dp), Color(0xB8141416), blurRadius = 42.dp)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xB82E2E31), Color(0xE0101012)),
-                ),
-                RoundedCornerShape(30.dp),
-            )
-            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(30.dp))
-            .padding(start = 13.8.dp, end = 13.8.dp, top = 27.5.dp, bottom = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(horizontal = 14.dp)
+            .frosted(RoundedCornerShape(32.dp), Color(0xDE161618), blurRadius = 38.dp)
+            .background(Color(0xDE161618), RoundedCornerShape(32.dp))
+            .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(32.dp))
+            .padding(start = 14.dp, end = 14.dp, top = 26.dp, bottom = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         items.chunked(4).forEachIndexed { rowIndex, row ->
             Row(Modifier.fillMaxWidth()) {
@@ -102,19 +97,19 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                     // Items ripple in one after another as the card opens.
                     val appear = remember { Animatable(0f) }
                     LaunchedEffect(Unit) {
-                        delay((rowIndex * 4 + colIndex) * 22L)
-                        appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 500f))
+                        delay((rowIndex * 4 + colIndex) * 20L)
+                        appear.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 500f))
                     }
-                    val iconColor = if (item.active) Color(0xFF2A1404) else Color.White
+                    val iconColor = if (item.active) Color(0xFF1A1A1A) else Color.White
                     Column(
                         Modifier
                             .weight(1f)
                             .graphicsLayer {
                                 alpha = appear.value.coerceIn(0f, 1f) * (if (item.enabled) 1f else 0.4f)
-                                val scale = 0.7f + 0.3f * appear.value
+                                val scale = 0.72f + 0.28f * appear.value
                                 scaleX = scale
                                 scaleY = scale
-                                translationY = (1f - appear.value) * 14.dp.toPx()
+                                translationY = (1f - appear.value) * 12.dp.toPx()
                             }
                             .clip(RoundedCornerShape(16.dp))
                             .clickable(enabled = item.enabled, onClick = item.onClick)
@@ -123,43 +118,38 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
                     ) {
                         Box(
                             Modifier
-                                .size(64.dp)
+                                .size(60.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (item.active) {
                                         Brush.radialGradient(
-                                            listOf(Color(0xFFFFB13B), Color(0xFFFF7A00), Color(0xFFE85D00)),
+                                            listOf(Color(0xFFFF952A), Color(0xFFFF6F00), Color(0xFFE65D00)),
                                         )
                                     } else {
-                                        Brush.radialGradient(
-                                            listOf(Color(0x5CFFFFFF), Color(0x2FFFFFFF), Color(0x18FFFFFF)),
+                                        Brush.verticalGradient(
+                                            listOf(Color(0x24FFFFFF), Color(0x18FFFFFF)),
                                         )
                                     }
                                 )
                                 .border(
                                     1.dp,
-                                    if (item.active) Color(0x55FFD39A) else Color(0x35FFFFFF),
+                                    if (item.active) Color(0x55FFA756) else Color(0x1FFFFFFF),
                                     CircleShape,
                                 )
-                                .graphicsLayer {
-                                    shadowElevation = if (item.active) 10.dp.toPx() else 3.dp.toPx()
-                                    shape = CircleShape
-                                    clip = false
-                                }
                                 .rotate(rotation),
                             contentAlignment = Alignment.Center,
                         ) {
                             item.icon(iconColor)
                         }
-                        Spacer(Modifier.height(11.dp))
+                        Spacer(Modifier.height(10.dp))
                         Text(
                             item.label,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            color = Color(0xEEFFFFFF),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 4.dp),
+                            modifier = Modifier.padding(horizontal = 2.dp),
                         )
                     }
                 }
@@ -171,8 +161,8 @@ fun QuickMenu(items: List<QuickItem>, rotation: Float, modifier: Modifier = Modi
 @Composable
 private fun HdrText(color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("HDR", color = color, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 15.sp)
-        Text("AUTO", color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 10.sp)
+        Text("HDR", color = color, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 14.sp)
+        Text("AUTO", color = color, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 9.sp)
     }
 }
 
@@ -194,18 +184,18 @@ fun quickMenuItems(
     onFilters: () -> Unit,
     onAbout: () -> Unit,
 ): List<QuickItem> = listOf(
-    QuickItem("Aspect ratio $aspectLabel", active = false, onClick = onAspect) { AspectGlyph(Modifier.size(26.dp)) },
-    QuickItem("Grid", active = gridOn, onClick = onGrid) { GridGlyph(Modifier.size(26.dp)) },
+    QuickItem("Aspect ratio", active = false, onClick = onAspect) { AspectGlyph(Modifier.size(24.dp)) },
+    QuickItem("Grid", active = gridOn, onClick = onGrid) { GridGlyph(Modifier.size(24.dp)) },
     QuickItem(if (timerSeconds > 0) "Timer ${timerSeconds}s" else "Timer", active = timerSeconds > 0, onClick = onTimer) {
-        TimerGlyph(0, Modifier.size(26.dp))
+        TimerGlyph(0, Modifier.size(24.dp))
     },
     QuickItem("Filters", active = false, enabled = filtersAvailable, onClick = onFilters) { color ->
-        FiltersGlyph(Modifier.size(26.dp), color)
+        FiltersGlyph(Modifier.size(24.dp), color)
     },
     QuickItem("Auto HDR", active = hdrOn && hdrAvailable, enabled = hdrAvailable, onClick = onHdr) { color -> HdrText(color) },
-    QuickItem("Mirror", active = mirrorOn, onClick = onMirror) { MirrorGlyph(Modifier.size(26.dp)) },
-    QuickItem("Sound", active = soundOn, onClick = onSound) { SoundGlyph(soundOn, Modifier.size(26.dp)) },
-    QuickItem("Settings", active = false, onClick = onAbout) { GearGlyph(Modifier.size(26.dp)) },
+    QuickItem("Mirror", active = mirrorOn, onClick = onMirror) { MirrorGlyph(Modifier.size(24.dp)) },
+    QuickItem("Sound", active = soundOn, onClick = onSound) { SoundGlyph(soundOn, Modifier.size(24.dp)) },
+    QuickItem("Settings", active = false, onClick = onAbout) { GearGlyph(Modifier.size(24.dp)) },
 )
 
 /** Exposure slider shown under the top bar when EV is tapped. */

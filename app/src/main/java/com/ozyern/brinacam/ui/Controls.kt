@@ -253,11 +253,11 @@ fun ShutterRow(
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             Box(
                 Modifier
-                    .size(45.5.dp)
+                    .size(48.dp)
                     .rotate(rotation)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(BrinaColors.Surface)
-                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0x28FFFFFF))
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
                     .clickable(onClick = onGallery)
                     .semantics { contentDescription = "Gallery" },
             ) {
@@ -266,14 +266,14 @@ fun ShutterRow(
                         thumbnail.asImageBitmap(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(45.5.dp),
+                        modifier = Modifier.size(48.dp),
                     )
                 } else {
                     Icon(
                         Icons.Rounded.PhotoLibrary,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.72f),
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(24.dp).align(Alignment.Center),
                     )
                 }
             }
@@ -290,7 +290,8 @@ fun ShutterRow(
                     turns += 1f
                     onSwitch()
                 },
-                size = 45,
+                size = 46,
+                color = Color(0x22FFFFFF),
             ) {
                 SyncGlyph(Modifier.size(24.dp).rotate(rotation + spin))
             }
@@ -303,14 +304,14 @@ fun ShutterButton(mode: CaptureMode, isRecording: Boolean, onClick: () -> Unit) 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press by animateFloatAsState(
-        if (pressed) 0.9f else 1f,
+        if (pressed) 0.92f else 1f,
         spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "press",
     )
     val isVideo = mode == CaptureMode.VIDEO
-    val top by animateColorAsState(if (isVideo) Color(0xFFF0585C) else Color(0xFFEC983E), label = "top")
-    val mid by animateColorAsState(if (isVideo) Color(0xFFE94D52) else Color(0xFFEC8C38), label = "mid")
-    val bottom by animateColorAsState(if (isVideo) Color(0xFFE0434A) else Color(0xFFEE7C33), label = "bottom")
+    val top by animateColorAsState(if (isVideo) Color(0xFFF0585C) else Color(0xFFFF9E30), label = "top")
+    val mid by animateColorAsState(if (isVideo) Color(0xFFE94D52) else Color(0xFFFF851B), label = "mid")
+    val bottom by animateColorAsState(if (isVideo) Color(0xFFE0434A) else Color(0xFFFF6D00), label = "bottom")
 
     Box(
         Modifier
@@ -321,20 +322,20 @@ fun ShutterButton(mode: CaptureMode, isRecording: Boolean, onClick: () -> Unit) 
     ) {
         Canvas(Modifier.size(ShutterRowHeight)) {
             val c = Offset(size.width / 2f, size.height / 2f)
-            // Faint warm glow.
+            // Faint warm glow
             drawCircle(
                 Brush.radialGradient(
-                    0.6f to bottom.copy(alpha = 0.16f),
+                    0.6f to bottom.copy(alpha = 0.22f),
                     1f to Color.Transparent,
                     center = c,
                     radius = size.minDimension / 2f,
                 ),
             )
-            // 75 dp ring: dark warm grey with a slightly lighter rim.
-            drawCircle(Color(0xFF332C29), radius = 37.5.dp.toPx(), center = c)
+            // 78 dp ring: dark warm track with a fine outer rim
+            drawCircle(Color(0x1FFFFFFF), radius = 39.dp.toPx(), center = c)
             drawCircle(
-                Color(0xFF4C4240),
-                radius = 37.dp.toPx(),
+                Color(0x35FFFFFF),
+                radius = 39.dp.toPx(),
                 center = c,
                 style = Stroke(width = 1.dp.toPx()),
             )
@@ -342,15 +343,15 @@ fun ShutterButton(mode: CaptureMode, isRecording: Boolean, onClick: () -> Unit) 
         if (isRecording) {
             Box(
                 Modifier
-                    .size(26.dp)
+                    .size(28.dp)
                     .scale(press)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(BrinaColors.Recording),
             )
         } else {
             Box(
                 Modifier
-                    .size(61.dp)
+                    .size(62.dp)
                     .scale(press)
                     .clip(CircleShape)
                     .background(Brush.verticalGradient(listOf(top, mid, bottom))),
@@ -435,7 +436,7 @@ fun ModeStrip(
             modes.forEach { mode ->
                 val isSelected = mode == selected
                 val textColor by animateColorAsState(
-                    if (isSelected) BrinaColors.Accent else Color.White,
+                    if (isSelected) BrinaColors.Accent else Color(0xAAFFFFFF),
                     label = "modeText",
                 )
                 Row(
@@ -443,32 +444,33 @@ fun ModeStrip(
                         .onGloballyPositioned {
                             centers[mode] = it.positionInParent().x + it.size.width / 2f
                         }
-                        .height(34.5.dp)
+                        .height(34.dp)
                         .then(
                             if (isSelected) {
                                 Modifier
-                                    .clip(RoundedCornerShape(17.25.dp))
-                                    .background(Color(0xFF191919))
-                                    .border(BorderStroke(1.dp, Color(0xFF2B2B2B)), RoundedCornerShape(17.25.dp))
+                                    .clip(RoundedCornerShape(17.dp))
+                                    .background(Color(0xCC1F1F22))
+                                    .border(BorderStroke(1.dp, Color(0x28FFFFFF)), RoundedCornerShape(17.dp))
                             } else {
-                                Modifier.clip(RoundedCornerShape(17.25.dp))
+                                Modifier.clip(RoundedCornerShape(17.dp))
                             }
                         )
                         .clickable(enabled = enabled) {
                             if (isSelected && mode == CaptureMode.PHOTO) onPhotoOptions() else onSelect(mode)
                         }
-                        .padding(horizontal = 18.dp),
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         mode.label,
                         color = textColor,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp,
                     )
                     if (isSelected && mode == CaptureMode.PHOTO) {
-                        Spacer(Modifier.width(8.dp))
-                        Canvas(Modifier.size(width = 8.dp, height = 5.5.dp)) {
+                        Spacer(Modifier.width(6.dp))
+                        Canvas(Modifier.size(width = 7.dp, height = 5.dp)) {
                             val path = Path().apply {
                                 moveTo(size.width / 2f, 0f)
                                 lineTo(size.width, size.height)
@@ -485,6 +487,47 @@ fun ModeStrip(
 }
 
 // ---- Small overlays -----------------------------------------------------------------------
+
+/**
+ * Delicate OnePlus center horizon / alignment crosshair in the middle of the viewfinder.
+ */
+@Composable
+fun CenterCrosshair(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(36.dp)) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val whiteSubtle = Color.White.copy(alpha = 0.35f)
+        val accent = BrinaColors.Accent
+        // White subtle horizontal line
+        drawLine(whiteSubtle, Offset(c.x - 14.dp.toPx(), c.y), Offset(c.x + 14.dp.toPx(), c.y), strokeWidth = 1.dp.toPx())
+        // Center orange precision crosshair
+        drawLine(accent, Offset(c.x - 4.dp.toPx(), c.y), Offset(c.x + 4.dp.toPx(), c.y), strokeWidth = 1.6.dp.toPx())
+        drawLine(accent, Offset(c.x, c.y - 7.dp.toPx()), Offset(c.x, c.y + 7.dp.toPx()), strokeWidth = 1.6.dp.toPx())
+    }
+}
+
+/**
+ * OnePlus auto night scene indicator badge shown on the bottom-left of the viewfinder.
+ */
+@Composable
+fun AutoNightBadge(modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xCC2A180E))
+            .border(1.dp, Color(0x66FF7700), RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NightMoonGlyph(Modifier.size(16.dp), color = BrinaColors.Accent)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "3s",
+            color = BrinaColors.Accent,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
 
 @Composable
 fun RecordingChip(seconds: Int, modifier: Modifier = Modifier) {

@@ -109,11 +109,19 @@ class MasterCameraController(
     }
 
     private fun createReaders(device: CameraDevice) {
-        val map = characteristics?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        val jpegSize = map?.getOutputSizes(ImageFormat.JPEG)?.maxByOrNull { it.width.toLong() * it.height }
-            ?: Size(1920, 1080)
-        val rawSizes = map?.getOutputSizes(ImageFormat.RAW_SENSOR).orEmpty()
+        val standardMap = characteristics?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        val maxMap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            characteristics?.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
+        } else null
+
+        val jpegSizes = (standardMap?.getOutputSizes(ImageFormat.JPEG).orEmpty().toList() +
+            maxMap?.getOutputSizes(ImageFormat.JPEG).orEmpty().toList())
+        val jpegSize = jpegSizes.maxByOrNull { it.width.toLong() * it.height } ?: Size(1920, 1080)
+
+        val rawSizes = (standardMap?.getOutputSizes(ImageFormat.RAW_SENSOR).orEmpty().toList() +
+            maxMap?.getOutputSizes(ImageFormat.RAW_SENSOR).orEmpty().toList())
         val rawSize = rawSizes.maxByOrNull { it.width.toLong() * it.height }
+
         jpegReader = ImageReader.newInstance(jpegSize.width, jpegSize.height, ImageFormat.JPEG, 2).also {
             it.setOnImageAvailableListener({ reader -> saveJpeg(reader.acquireLatestImage()) }, handler)
         }
@@ -172,6 +180,9 @@ class MasterCameraController(
         builder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
         builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureMs * 1_000_000L)
         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            builder.set(CaptureRequest.SENSOR_PIXEL_MODE, android.hardware.camera2.CameraMetadata.SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION)
+        }
     }
 
     private fun saveJpeg(image: android.media.Image?) {

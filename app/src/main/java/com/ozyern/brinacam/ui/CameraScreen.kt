@@ -270,6 +270,13 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                         }
                     },
             ) {
+                // OnePlus delicate center level crosshair
+                CenterCrosshair(Modifier.align(Alignment.Center))
+
+                if (state.mode == CaptureMode.PHOTO && !state.isRecording && state.lensFacing == CameraSelector.LENS_FACING_BACK) {
+                    AutoNightBadge(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 12.dp))
+                }
+
                 focusPoint?.let { point ->
                     val exposure = state.exposure
                     val fraction = if (exposure.max > 0) exposure.index.toFloat() / exposure.max else 0f

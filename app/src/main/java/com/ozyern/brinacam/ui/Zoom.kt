@@ -15,21 +15,20 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.HdrAuto
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,15 +44,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -75,15 +77,15 @@ import kotlin.math.sin
 
 private const val DEGREES_PER_STOP = 26f
 private val LN2 = ln(2f)
-val ZoomControlsHeight = 170.dp
+val ZoomControlsHeight = 126.dp
 
 private fun log2(value: Float) = ln(value) / LN2
 
-/** Preset zoom stops like the OnePlus camera: ultra-wide (if any), 1x, 2, 3, 6, 10. */
+/** Preset zoom stops matching OnePlus Camera: 0.6x ultra-wide, 1x main, 2x, 3x tele, 6x. */
 fun zoomPresets(min: Float, max: Float): List<Float> = buildList {
     if (min < 0.95f) add(min)
     add(1f)
-    listOf(2f, 3f, 6f, 10f).forEach { if (it <= max + 0.01f) add(it) }
+    listOf(2f, 3f, 6f).forEach { if (it <= max + 0.01f) add(it) }
 }
 
 fun formatZoom(value: Float): String {
@@ -96,8 +98,9 @@ fun formatZoom(value: Float): String {
 }
 
 /**
- * Bottom row of the viewfinder: Auto HDR on the left, zoom presets in the middle,
- * filters on the right. Dragging sideways over it opens the zoom dial.
+ * Zoom controls at the bottom of the viewfinder, OnePlus style:
+ * Beautify on the left, presets in the center (0.6, 1x, 2, 3, 6), Filters on the right.
+ * Horizontal drag smoothly transitions to the precision circular zoom dial.
  */
 @Composable
 fun ZoomControls(
@@ -123,7 +126,7 @@ fun ZoomControls(
     var interacting by remember { mutableStateOf(false) }
     var releaseTick by remember { mutableIntStateOf(0) }
     var dialVisible by remember { mutableStateOf(false) }
-    val pxPerStop = with(LocalDensity.current) { 70.dp.toPx() }
+    val pxPerStop = with(LocalDensity.current) { 68.dp.toPx() }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     var motion by remember { mutableStateOf<Job?>(null) }
@@ -132,12 +135,12 @@ fun ZoomControls(
         if (interacting) {
             dialVisible = true
         } else if (dialVisible) {
-            delay(1100)
+            delay(1200)
             dialVisible = false
         }
     }
 
-    // Light tick whenever the zoom crosses a preset, like a detent.
+    // Light tick when zoom crosses a preset stop
     val presetIndex = presets.indexOfLast { it <= zoom + 0.005f }
     var lastPresetIndex by remember { mutableIntStateOf(presetIndex) }
     LaunchedEffect(presetIndex) {
@@ -147,12 +150,11 @@ fun ZoomControls(
         lastPresetIndex = presetIndex
     }
 
-    // Moves the zoom in log space so every stop takes the same time.
     fun glideTo(target: Float) {
         motion?.cancel()
         motion = scope.launch {
             val anim = Animatable(log2(currentZoom))
-            anim.animateTo(log2(target), tween(320, easing = FastOutSlowInEasing)) {
+            anim.animateTo(log2(target), tween(300, easing = FastOutSlowInEasing)) {
                 currentOnZoom(2f.pow(value))
             }
         }
@@ -174,12 +176,11 @@ fun ZoomControls(
                         interacting = true
                     },
                     onDragEnd = {
-                        // Keep spinning with the release velocity, then settle.
                         val velocity = -tracker.calculateVelocity().x / pxPerStop
                         motion = scope.launch {
                             val anim = Animatable(log2(currentZoom))
                             anim.updateBounds(lo, hi)
-                            anim.animateDecay(velocity, exponentialDecay(frictionMultiplier = 2.2f)) {
+                            anim.animateDecay(velocity, exponentialDecay(frictionMultiplier = 2.4f)) {
                                 currentOnZoom(2f.pow(value))
                             }
                             interacting = false
@@ -199,71 +200,93 @@ fun ZoomControls(
             },
         contentAlignment = Alignment.BottomCenter,
     ) {
+        // Precision circular zoom dial (OnePlus curved lens style)
         AnimatedVisibility(
             visible = dialVisible,
             enter = fadeIn(tween(140)) +
-                slideInVertically(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 } +
+                slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { it / 4 } +
                 scaleIn(
-                    spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
-                    initialScale = 0.88f,
+                    spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                    initialScale = 0.92f,
                     transformOrigin = TransformOrigin(0.5f, 1f),
                 ),
-            exit = fadeOut(tween(220)) +
-                slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 4 } +
-                scaleOut(tween(260, easing = FastOutSlowInEasing), targetScale = 0.92f, transformOrigin = TransformOrigin(0.5f, 1f)),
+            exit = fadeOut(tween(200)) +
+                slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it / 5 } +
+                scaleOut(tween(220, easing = FastOutSlowInEasing), targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f)),
         ) {
-            ZoomDial(zoom = zoom, minZoom = minZoom, maxZoom = maxZoom, presets = presets, focalLength = focalLength)
+            ZoomDial(
+                zoom = zoom,
+                minZoom = minZoom,
+                maxZoom = maxZoom,
+                presets = presets,
+                filtersAvailable = filtersAvailable,
+                filterActive = filterActive,
+                rotation = rotation,
+                onFilters = onFilters,
+            )
         }
+
+        // Default resting state: Beautify on left, clean presets, Filters on right
         AnimatedVisibility(
             visible = !dialVisible,
-            enter = fadeIn(tween(220, delayMillis = 80)),
-            exit = fadeOut(tween(120)),
+            enter = fadeIn(tween(200, delayMillis = 60)),
+            exit = fadeOut(tween(100)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(horizontal = 18.dp),
+                    .height(52.dp)
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SideButton(visible = hdrAvailable, description = "Auto HDR", onClick = onHdr) {
-                    Icon(
-                        Icons.Rounded.HdrAuto,
-                        contentDescription = null,
-                        tint = if (hdrOn) BrinaColors.Accent else Color.White,
-                        modifier = Modifier.size(20.dp).rotate(rotation),
-                    )
+                // Left side: Beautify / Retouch icon (OnePlus style)
+                SideButton(visible = true, description = "Beautify", onClick = {}) {
+                    BeautifyGlyph(Modifier.size(20.dp).rotate(rotation), color = Color(0xCCFFFFFF))
                 }
+
                 Spacer(Modifier.weight(1f))
+
+                // Center zoom presets: 0.6, 1x, 2, 3, 6
                 if (canZoom) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(0.6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         presets.forEachIndexed { index, preset ->
                             val selected = index == selectedIndex
                             Box(
                                 Modifier
-                                    .size(36.dp)
-                                    .then(if (selected) Modifier.frosted(CircleShape, Color(0x8C5A3A1C), 12.dp) else Modifier)
-                                    .clip(CircleShape)
+                                    .size(34.dp)
+                                    .then(
+                                        if (selected) {
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .background(Color(0x403A2214))
+                                                .border(1.dp, Color(0x66FF7700), CircleShape)
+                                        } else {
+                                            Modifier.clip(CircleShape)
+                                        }
+                                    )
                                     .clickable { glideTo(preset) }
                                     .semantics { contentDescription = "Zoom ${formatZoom(preset)}x" },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     if (selected) formatZoom(zoom) + "×" else formatZoom(preset),
-                                    color = if (selected) BrinaColors.Accent else Color.White,
-                                    fontSize = if (selected) 13.sp else 14.sp,
-                                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Bold,
+                                    color = if (selected) BrinaColors.Accent else Color(0xDDFFFFFF),
+                                    fontSize = if (selected) 13.sp else 13.5.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                                     modifier = Modifier.rotate(rotation),
                                 )
                             }
                         }
                     }
                 }
+
                 Spacer(Modifier.weight(1f))
+
+                // Right side: Filters icon (OnePlus 3-ring style)
                 SideButton(visible = filtersAvailable, description = "Filters", onClick = onFilters) {
                     FiltersGlyph(
                         Modifier.size(20.dp).rotate(rotation),
@@ -285,7 +308,7 @@ private fun SideButton(
     Box(
         Modifier
             .size(36.dp)
-            .then(if (visible) Modifier.frosted(CircleShape, Color(0x4D000000), 12.dp) else Modifier)
+            .then(if (visible) Modifier.frosted(CircleShape, Color(0x33000000), 10.dp) else Modifier)
             .clip(CircleShape)
             .then(
                 if (visible) {
@@ -302,12 +325,12 @@ private fun SideButton(
     }
 }
 
-/** Three overlapping rings, OnePlus's filters icon. */
+/** Three overlapping rings: OnePlus camera filters icon. */
 @Composable
 fun FiltersGlyph(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier) {
         val r = size.width * 0.27f
-        val stroke = Stroke(width = 1.6f.dp.toPx())
+        val stroke = Stroke(width = 1.5f.dp.toPx())
         drawCircle(color, r, Offset(size.width * 0.5f, size.height * 0.33f), style = stroke)
         drawCircle(color, r, Offset(size.width * 0.33f, size.height * 0.64f), style = stroke)
         drawCircle(color, r, Offset(size.width * 0.67f, size.height * 0.64f), style = stroke)
@@ -315,112 +338,197 @@ fun FiltersGlyph(modifier: Modifier = Modifier, color: Color = Color.White) {
 }
 
 /**
- * Half-dial centred on the current zoom, OnePlus style: frosted dark arc, ticks,
- * preset numbers set along the arc with their 35 mm-equivalent focal lengths.
+ * OnePlus-style curved zoom dial:
+ * - Frosted curved sector floating above the bottom controls shelf.
+ * - Single precision orange tick needle indicator at the top apex.
+ * - Vibrant orange current zoom value readout (e.g. 0.9x).
+ * - Upright preset numbers (0.6, 1, 2, 3, 6) smoothly tracking the curve.
+ * - Flanked by Beautify and Filters buttons at the bottom edges.
  */
 @Composable
-private fun ZoomDial(zoom: Float, minZoom: Float, maxZoom: Float, presets: List<Float>, focalLength: Float) {
-    val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontFamily = BrinaFont, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-    val mmStyle = TextStyle(fontFamily = BrinaFont, color = Color(0xB3FFFFFF), fontSize = 10.sp, fontWeight = FontWeight.Medium)
-    val currentStyle = TextStyle(fontFamily = BrinaFont, color = BrinaColors.Accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-    val currentMmStyle = TextStyle(fontFamily = BrinaFont, color = BrinaColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+private fun ZoomDial(
+    zoom: Float,
+    minZoom: Float,
+    maxZoom: Float,
+    presets: List<Float>,
+    filtersAvailable: Boolean,
+    filterActive: Boolean,
+    rotation: Float,
+    onFilters: () -> Unit,
+) {
     val density = LocalDensity.current
+    val arcTopPx = with(density) { 10.dp.toPx() }
+    val measurer = rememberTextMeasurer()
+    val presetLabelStyle = TextStyle(
+        fontFamily = BrinaFont,
+        color = Color(0xA6FFFFFF),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
+    val currentZoomStyle = TextStyle(
+        fontFamily = BrinaFont,
+        color = BrinaColors.Accent,
+        fontSize = 16.5.sp,
+        fontWeight = FontWeight.Bold,
+    )
 
     Box(
         Modifier
             .fillMaxWidth()
-            .height(170.dp),
+            .height(ZoomControlsHeight),
     ) {
-        val radiusFraction = 0.66f
-        val topInset = with(density) { 22.dp.toPx() }
-        // Frosted disc behind the dial, clipped to the visible arc.
+        // Frosted curved lens background
         Box(
             Modifier
-                .fillMaxWidth()
-                .height(170.dp)
+                .fillMaxSize()
                 .frosted(
                     GenericShape { size, _ ->
-                        val r = size.width * radiusFraction
+                        val r = size.width * 0.76f
+                        val arcTop = arcTopPx
                         val cx = size.width / 2f
-                        val cy = r + topInset
-                        addOval(androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r))
+                        val cy = arcTop + r
+                        val rect = Rect(cx - r, cy - r, cx + r, cy + r)
+                        val path = Path()
+                        path.arcTo(rect, 215f, 110f, false)
+                        path.lineTo(size.width, size.height)
+                        path.lineTo(0f, size.height)
+                        path.close()
+                        addPath(path)
                     },
-                    tint = Color(0x73000000),
+                    tint = Color(0x66141416),
+                    blurRadius = 24.dp,
                 ),
         )
+
         Canvas(
             Modifier
-                .fillMaxWidth()
-                .height(170.dp),
+                .fillMaxSize(),
         ) {
-            val radius = size.width * radiusFraction
-            val center = Offset(size.width / 2f, radius + topInset)
+            val r = size.width * 0.76f
+            val arcTop = arcTopPx
+            val cx = size.width / 2f
+            val cy = arcTop + r
+            val center = Offset(cx, cy)
             val current = log2(zoom)
 
-            fun pointAt(angleDeg: Float, r: Float): Offset {
+            // Top curved rim border
+            drawArc(
+                color = Color(0x2EFFFFFF),
+                startAngle = 215f,
+                sweepAngle = 110f,
+                useCenter = false,
+                topLeft = Offset(cx - r, cy - r),
+                size = Size(r * 2, r * 2),
+                style = Stroke(width = 1.dp.toPx()),
+            )
+
+            // Curved tick track
+            val trackR = r - 2.dp.toPx()
+            drawArc(
+                color = Color(0x1FFFFFFF),
+                startAngle = 218f,
+                sweepAngle = 104f,
+                useCenter = false,
+                topLeft = Offset(cx - trackR, cy - trackR),
+                size = Size(trackR * 2, trackR * 2),
+                style = Stroke(width = 0.8.dp.toPx()),
+            )
+
+            fun pointAt(angleDeg: Float, radius: Float): Offset {
                 val rad = Math.toRadians(angleDeg.toDouble())
-                return Offset(center.x + r * cos(rad).toFloat(), center.y + r * sin(rad).toFloat())
+                return Offset(center.x + radius * cos(rad).toFloat(), center.y + radius * sin(rad).toFloat())
             }
 
-            fun visibility(angle: Float) = (1f - abs(angle + 90f) / 75f).coerceIn(0f, 1f)
+            fun visibility(angle: Float) = (1f - abs(angle + 90f) / 52f).coerceIn(0f, 1f)
 
-            // Fine ticks every 0.1 stop.
+            // Fine ticks along the arc every 0.1 log-stop
             var stop = (log2(minZoom) * 10f).toInt() / 10f
             val last = log2(maxZoom)
             while (stop <= last + 0.001f) {
                 val angle = -90f + (stop - current) * DEGREES_PER_STOP
                 val alpha = visibility(angle)
                 if (alpha > 0f) {
+                    val outer = pointAt(angle, trackR)
+                    val inner = pointAt(angle, trackR - 5.dp.toPx())
                     drawLine(
-                        Color.White.copy(alpha = 0.5f * alpha),
-                        pointAt(angle, radius - 4.dp.toPx()),
-                        pointAt(angle, radius - 10.dp.toPx()),
-                        strokeWidth = 1.dp.toPx(),
+                        Color.White.copy(alpha = 0.35f * alpha),
+                        outer,
+                        inner,
+                        strokeWidth = 0.8.dp.toPx(),
+                        cap = StrokeCap.Round,
                     )
                 }
                 stop += 0.1f
             }
 
-            // Preset numbers and focal lengths, turned to follow the arc.
+            // Preset ticks and upright labels (0.6, 1, 2, 3, 6)
             presets.forEach { preset ->
                 val angle = -90f + (log2(preset) - current) * DEGREES_PER_STOP
                 val alpha = visibility(angle)
-                if (alpha <= 0f || abs(angle + 90f) < 7f) return@forEach
+                if (alpha <= 0.05f) return@forEach
+
+                // Taller major preset tick
+                val outer = pointAt(angle, trackR)
+                val inner = pointAt(angle, trackR - 8.5.dp.toPx())
                 drawLine(
-                    Color.White.copy(alpha = alpha),
-                    pointAt(angle, radius - 4.dp.toPx()),
-                    pointAt(angle, radius - 16.dp.toPx()),
-                    strokeWidth = 1.6f.dp.toPx(),
+                    Color.White.copy(alpha = 0.75f * alpha),
+                    outer,
+                    inner,
+                    strokeWidth = 1.4.dp.toPx(),
+                    cap = StrokeCap.Round,
                 )
-                val label = measurer.measure(formatZoom(preset), labelStyle)
-                val mm = measurer.measure("${(focalLength * preset).roundToInt()} mm", mmStyle)
-                val labelAt = pointAt(angle, radius - 34.dp.toPx())
-                val mmAt = pointAt(angle, radius - 52.dp.toPx())
-                rotate(angle + 90f, labelAt) {
-                    drawText(label, topLeft = Offset(labelAt.x - label.size.width / 2f, labelAt.y - label.size.height / 2f), alpha = alpha)
-                }
-                rotate(angle + 90f, mmAt) {
-                    drawText(mm, topLeft = Offset(mmAt.x - mm.size.width / 2f, mmAt.y - mm.size.height / 2f), alpha = alpha)
+
+                // Only render preset label if it's not colliding with the center indicator
+                if (abs(angle + 90f) > 9f) {
+                    val label = measurer.measure(formatZoom(preset), presetLabelStyle)
+                    val labelPos = pointAt(angle, trackR - 22.dp.toPx())
+                    // Draw text upright (no rotation) for clean readability
+                    drawText(
+                        label,
+                        topLeft = Offset(labelPos.x - label.size.width / 2f, labelPos.y - label.size.height / 2f),
+                        alpha = alpha,
+                    )
                 }
             }
 
-            // Current value: orange double bar, zoom and focal length.
-            val barGap = 2.dp.toPx()
-            for (dx in listOf(-barGap, barGap)) {
-                val top = pointAt(-90f, radius - 2.dp.toPx())
-                drawLine(
-                    BrinaColors.Accent,
-                    Offset(top.x + dx, top.y),
-                    Offset(top.x + dx, top.y + 14.dp.toPx()),
-                    strokeWidth = 1.8f.dp.toPx(),
+            // OnePlus single precision orange vertical needle indicator at apex (12 o'clock)
+            val indicatorTop = Offset(cx, arcTop - 1.dp.toPx())
+            val indicatorBottom = Offset(cx, arcTop + 11.dp.toPx())
+            drawLine(
+                BrinaColors.Accent,
+                indicatorTop,
+                indicatorBottom,
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+
+            // Prominent warm orange current zoom readout right below the needle
+            val zoomText = measurer.measure(formatZoom(zoom) + "×", currentZoomStyle)
+            val textCenterY = arcTop + 27.dp.toPx()
+            drawText(
+                zoomText,
+                topLeft = Offset(cx - zoomText.size.width / 2f, textCenterY - zoomText.size.height / 2f),
+            )
+        }
+
+        // Side controls embedded at the bottom flanks of the dial
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SideButton(visible = true, description = "Beautify", onClick = {}) {
+                BeautifyGlyph(Modifier.size(20.dp).rotate(rotation), color = Color(0xCCFFFFFF))
+            }
+            Spacer(Modifier.weight(1f))
+            SideButton(visible = filtersAvailable, description = "Filters", onClick = onFilters) {
+                FiltersGlyph(
+                    Modifier.size(20.dp).rotate(rotation),
+                    color = if (filterActive) BrinaColors.Accent else Color.White,
                 )
             }
-            val value = measurer.measure(formatZoom(zoom) + "×", currentStyle)
-            val valueMm = measurer.measure("${(focalLength * zoom).roundToInt()} mm", currentMmStyle)
-            val valueAt = pointAt(-90f, radius - 38.dp.toPx())
-            drawText(value, topLeft = Offset(valueAt.x - value.size.width / 2f, valueAt.y - value.size.height / 2f))
-            drawText(valueMm, topLeft = Offset(valueAt.x - valueMm.size.width / 2f, valueAt.y + value.size.height / 2f))
         }
     }
 }

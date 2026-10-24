@@ -249,3 +249,54 @@ fun GearGlyph(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Beautify / Retouch icon from OnePlus Camera (face profile contour with sparkle).
+ */
+@Composable
+fun BeautifyGlyph(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier) {
+        onGrid {
+            val face = Path().apply {
+                moveTo(7.5f, 5.5f)
+                cubicTo(11f, 5.5f, 14.5f, 8f, 14.5f, 11.5f)
+                lineTo(16.5f, 13.5f)
+                lineTo(14.5f, 14.5f)
+                cubicTo(14.5f, 16f, 14f, 17f, 13f, 18f)
+                cubicTo(11f, 19.5f, 8.5f, 19.5f, 7.5f, 19.5f)
+            }
+            drawPath(face, color, style = stroke)
+            val sx = 18f
+            val sy = 7f
+            val star = Path().apply {
+                moveTo(sx, sy - 3f)
+                quadraticTo(sx, sy, sx + 3f, sy)
+                quadraticTo(sx, sy, sx, sy + 3f)
+                quadraticTo(sx, sy, sx - 3f, sy)
+                quadraticTo(sx, sy, sx, sy - 3f)
+                close()
+            }
+            drawPath(star, color, style = Fill)
+        }
+    }
+}
+
+/** Crescent moon for night mode indicator badge. */
+@Composable
+fun NightMoonGlyph(modifier: Modifier = Modifier, color: Color = BrinaColors.Accent) {
+    Canvas(modifier) {
+        onGrid {
+            val moon = Path().apply {
+                moveTo(16.5f, 5.5f)
+                cubicTo(10f, 6.5f, 6f, 12f, 8f, 18f)
+                cubicTo(13f, 19.5f, 17.5f, 16.5f, 18.5f, 13f)
+                cubicTo(14f, 14f, 11.5f, 10.5f, 13f, 7.5f)
+                cubicTo(14f, 6.5f, 15.2f, 5.8f, 16.5f, 5.5f)
+                close()
+            }
+            drawPath(moon, color, style = Fill)
+            drawCircle(color, 0.9f, Offset(18f, 6f))
+            drawCircle(color, 0.7f, Offset(6.5f, 8.5f))
+        }
+    }
+}
