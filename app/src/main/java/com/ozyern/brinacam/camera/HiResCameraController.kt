@@ -212,9 +212,10 @@ class HiResCameraController(
         } else {
             null
         }
-        val ultra = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
-            ?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR)
-            == true
+        val ultra = (
+            chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+                ?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR) == true
+            )
 
         val maxJpegs = maximum?.getOutputSizes(ImageFormat.JPEG).orEmpty()
         val standardJpegs = standard?.getOutputSizes(ImageFormat.JPEG).orEmpty()
@@ -447,14 +448,10 @@ class HiResCameraController(
             ) {
                 continue
             }
-            runCatching {
-                @Suppress("UNCHECKED_CAST")
-                when (key.type) {
-                    java.lang.Integer::class.java -> builder.set(key as CaptureRequest.Key<Int>, 1)
-                    java.lang.Byte::class.java -> builder.set(key as CaptureRequest.Key<Byte>, 1.toByte())
-                    java.lang.Boolean::class.java -> builder.set(key as CaptureRequest.Key<Boolean>, true)
-                }
-            }
+            @Suppress("UNCHECKED_CAST")
+            runCatching { builder.set(key as CaptureRequest.Key<Int>, 1) }
+                .recoverCatching { builder.set(key as CaptureRequest.Key<Byte>, 1.toByte()) }
+                .recoverCatching { builder.set(key as CaptureRequest.Key<Boolean>, true) }
         }
     }
 
