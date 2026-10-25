@@ -3,7 +3,6 @@ package com.ozyern.brinacam.camera
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
-import android.graphics.ImageFormat
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
@@ -17,7 +16,6 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Rational
-import android.util.Size
 import android.view.Surface
 import android.widget.Toast
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -34,7 +32,6 @@ import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.ViewPort
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.extensions.ExtensionMode
 import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -106,6 +103,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
     private var masterCamera: MasterCameraController? = null
+    private var hiResCamera: HiResCameraController? = null
     private var masterSurface: Surface? = null
     private var owner: LifecycleOwner? = null
     private var targetRotation = Surface.ROTATION_0
@@ -160,6 +158,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 val next = FlashSetting.entries[(s.settings.flash.ordinal + 1) % FlashSetting.entries.size]
                 updateSettings { it.copy(flash = next) }
                 imageCapture?.flashMode = imageFlashMode(next)
+                hiResCamera?.setFlash(next)
                 if (s.mode == CaptureMode.VIDEO) camera?.cameraControl?.enableTorch(next == FlashSetting.ON)
             }
             CameraEvent.CycleTimer -> updateSettings {
@@ -194,7 +193,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
             CameraEvent.ToggleMasterRaw -> _state.update { it.copy(masterRawOn = !it.masterRawOn) }
             is CameraEvent.MasterSurface -> {
                 masterSurface = event.surface
-                if (s.mode == CaptureMode.MASTER && event.surface != null) bind()
+                if ((s.mode == CaptureMode.MASTER || s.mode == CaptureMode.HIRES) && event.surface != null) bind()
             }
             CameraEvent.ToggleMirror -> updateSettings { it.copy(mirrorFront = !it.mirrorFront) }
             CameraEvent.ToggleSound -> updateSettings { it.copy(shutterSound = !it.shutterSound) }
@@ -214,6 +213,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 targetRotation = event.surfaceRotation
                 imageCapture?.targetRotation = targetRotation
                 videoCapture?.targetRotation = targetRotation
+                hiResCamera?.setTargetRotation(targetRotation)
             }
         }
     }
@@ -248,22 +248,22 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Zoom, exposure, focus ------------------------------------------------------------
 
     private fun setZoom(ratio: Float) {
-        val cam = camera ?: return
         val zoom = _state.value.zoom
         val clamped = ratio.coerceIn(zoom.min, zoom.max)
         lastZoomRequest = SystemClock.uptimeMillis()
         _state.update { it.copy(zoom = it.zoom.copy(ratio = clamped)) }
-        cam.cameraControl.setZoomRatio(clamped)
+        hiResCamera?.setZoom(clamped)
+        camera?.cameraControl?.setZoomRatio(clamped)
     }
 
     private fun setExposure(index: Int) {
-        val cam = camera ?: return
         val exposure = _state.value.exposure
         if (!exposure.supported) return
         val clamped = index.coerceIn(exposure.min, exposure.max)
         if (clamped == exposure.index) return
         _state.update { it.copy(exposure = it.exposure.copy(index = clamped)) }
-        cam.cameraControl.setExposureCompensationIndex(clamped)
+        hiResCamera?.setExposure(clamped)
+        camera?.cameraControl?.setExposureCompensationIndex(clamped)
     }
 
     private fun meteringFactory(): SurfaceOrientedMeteringPointFactory? {
@@ -272,6 +272,11 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun focusAt(x: Float, y: Float) {
+        if (_state.value.mode == CaptureMode.HIRES) {
+            hiResCamera?.focusAt(x, y)
+            _state.update { it.copy(focusLocked = false) }
+            return
+        }
         val cam = camera ?: return
         val factory = meteringFactory() ?: return
         _state.update { it.copy(focusLocked = false) }
@@ -337,7 +342,11 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(captureTick = it.captureTick + 1) }
         if (s.settings.shutterSound) shutterPool.play(shutterSoundId, 1f, 1f, 1, 0, 1f)
 
-        capturePhoto(s, if (s.settings.burstOn && s.mode != CaptureMode.HIRES) 3 else 1)
+        if (s.mode == CaptureMode.HIRES) {
+            hiResCamera?.capture() ?: toast("HI-RES isn't ready")
+            return
+        }
+        capturePhoto(s, if (s.settings.burstOn) 3 else 1)
     }
 
     private fun capturePhoto(settings: CameraUiState, remaining: Int) {
@@ -466,22 +475,6 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
     private fun hasExtension(selector: CameraSelector, extension: Int): Boolean =
         extensions?.let { runCatching { it.isExtensionAvailable(selector, extension) }.getOrDefault(false) } ?: false
 
-    private fun largestJpegSize(selector: CameraSelector): Size? = runCatching {
-        val info = Camera2CameraInfo.from(provider!!.getCameraInfo(selector))
-        val standard = info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            ?.getOutputSizes(ImageFormat.JPEG)
-            .orEmpty()
-        val maximum = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            info.getCameraCharacteristic(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP_MAXIMUM_RESOLUTION)
-                ?.getOutputSizes(ImageFormat.JPEG)
-                .orEmpty()
-        } else {
-            emptyArray()
-        }
-        (standard.asSequence() + maximum.asSequence())
-            .maxByOrNull { it.width.toLong() * it.height.toLong() }
-    }.getOrNull()
-
     private fun refreshModes() {
         val base = CameraSelector.Builder().requireLensFacing(_state.value.lensFacing).build()
         val modes = buildList {
@@ -507,20 +500,32 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         val owner = owner ?: return
         val s = _state.value
 
-        if (s.mode == CaptureMode.MASTER) {
+        if (s.mode == CaptureMode.MASTER || s.mode == CaptureMode.HIRES) {
             provider.unbindAll()
+            camera = null
+            imageCapture = null
+            videoCapture = null
             val surface = masterSurface ?: return
             masterCamera?.close()
-            masterCamera = MasterCameraController(
-                getApplication(),
-                onReady = { rawAvailable -> _state.update { it.copy(masterRawAvailable = rawAvailable) } },
-                onSaved = { uri, mime -> showSaved(uri, mime) },
-                onError = { message -> toast(message) },
-            ).also { it.start(surface, s.masterIso, s.masterExposureMs) }
+            masterCamera = null
+            hiResCamera?.close()
+            hiResCamera = null
+            if (s.mode == CaptureMode.MASTER) {
+                masterCamera = MasterCameraController(
+                    getApplication(),
+                    onReady = { rawAvailable -> _state.update { it.copy(masterRawAvailable = rawAvailable) } },
+                    onSaved = { uri, mime -> showSaved(uri, mime) },
+                    onError = { message -> toast(message) },
+                ).also { it.start(surface, s.masterIso, s.masterExposureMs) }
+            } else {
+                startHiRes(surface)
+            }
             return
         }
         masterCamera?.close()
         masterCamera = null
+        hiResCamera?.close()
+        hiResCamera = null
 
         val base = CameraSelector.Builder().requireLensFacing(s.lensFacing).build()
         val extensionMode = when (s.mode) {
@@ -573,61 +578,10 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
                 .setFlashMode(imageFlashMode(s.settings.flash))
                 .setTargetRotation(targetRotation)
 
-            if (s.mode == CaptureMode.HIRES) {
-                val maxJpeg = largestJpegSize(selector)
-                val hiResResolution = ResolutionSelector.Builder()
-                    .setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
-
-                if (maxJpeg != null) {
-                    hiResResolution.setResolutionStrategy(
-                        ResolutionStrategy(
-                            maxJpeg,
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
-                        )
-                    )
-                    // Ensure aspect ratio strategy accommodates full sensor dimension (typically 4:3)
-                    val targetAspect = if (maxJpeg.width * 9 == maxJpeg.height * 16 || maxJpeg.height * 9 == maxJpeg.width * 16) {
-                        AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
-                    } else {
-                        AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY
-                    }
-                    hiResResolution.setAspectRatioStrategy(targetAspect)
-                } else {
-                    hiResResolution.setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
-                    hiResResolution.setAspectRatioStrategy(ratioStrategy)
-                }
-                builder.setResolutionSelector(hiResResolution.build())
-
-                // Enable Camera2 maximum resolution sensor mode (remosaic / unbinned 50MP / 200MP)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    Camera2Interop.Extender(builder)
-                        .setCaptureRequestOption(
-                            CaptureRequest.SENSOR_PIXEL_MODE,
-                            CameraMetadata.SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION,
-                        )
-                }
-
-                // Activate vendor remosaic / ultra-high-resolution keys if supported (OnePlus / Qualcomm / MediaTek)
-                val vendorKeys = listOf(
-                    "org.codeaurora.qcamera3.remosaic.modes",
-                    "com.oplus.camera.high.resolution.mode",
-                    "com.mediatek.control.capture.remosaicenable",
-                )
-                for (vendorName in vendorKeys) {
-                    runCatching {
-                        val constructor = CaptureRequest.Key::class.java.getDeclaredConstructor(String::class.java, Class::class.java)
-                        constructor.isAccessible = true
-                        @Suppress("UNCHECKED_CAST")
-                        val key = constructor.newInstance(vendorName, Int::class.javaObjectType) as CaptureRequest.Key<Any>
-                        Camera2Interop.Extender(builder).setCaptureRequestOption(key, 1)
-                    }
-                }
-            } else {
-                val resolution = ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(ratioStrategy)
-                    .build()
-                builder.setResolutionSelector(resolution)
-            }
+            val resolution = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(ratioStrategy)
+                .build()
+            builder.setResolutionSelector(resolution)
 
             // Ultra HDR (JPEG_R) photos where the camera supports them.
             val ultraHdrAvailable = extensionMode == null && runCatching {
@@ -725,10 +679,54 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
         FlashSetting.ON -> ImageCapture.FLASH_MODE_ON
     }
 
+    private fun startHiRes(surface: Surface) {
+        val s = _state.value
+        hiResCamera = HiResCameraController(
+            getApplication(),
+            s.lensFacing,
+            targetRotation,
+            onReady = { minZoom, maxZoom, evMin, evMax, evStep ->
+                _state.update {
+                    it.copy(
+                        zoom = it.zoom.copy(ratio = 1f, min = minZoom, max = maxZoom),
+                        exposure = ExposureState(
+                            supported = evMin != evMax,
+                            index = 0,
+                            min = evMin,
+                            max = evMax,
+                            step = evStep,
+                        ),
+                        focusLocked = false,
+                    )
+                }
+            },
+            onCaptured = { jpeg, width, height ->
+                Log.i(TAG, "HI-RES saved ${width}x${height}")
+                viewModelScope.launch(Dispatchers.IO) {
+                    val resolver = getApplication<Application>().contentResolver
+                    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, media.newImageValues())
+                    if (uri == null) {
+                        withContext(Dispatchers.Main) { toast("Couldn't save photo") }
+                        return@launch
+                    }
+                    resolver.openOutputStream(uri)?.use { output -> output.write(jpeg) }
+                    writePhotoMetadata(uri, s.settings.privateMetadata)
+                    withContext(Dispatchers.Main) { showSaved(uri, "image/jpeg") }
+                }
+            },
+            onError = { message -> toast(message) },
+        ).also {
+            it.start(surface)
+            it.setFlash(s.settings.flash)
+        }
+    }
+
     private fun toast(text: String) = Toast.makeText(getApplication(), text, Toast.LENGTH_SHORT).show()
 
     override fun onCleared() {
         recording?.stop()
+        hiResCamera?.close()
+        masterCamera?.close()
         sound.release()
         shutterPool.release()
     }

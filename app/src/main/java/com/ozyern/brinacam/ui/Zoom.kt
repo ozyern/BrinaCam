@@ -77,7 +77,8 @@ import kotlin.math.sin
 
 private const val DEGREES_PER_STOP = 26f
 private val LN2 = ln(2f)
-val ZoomControlsHeight = 126.dp
+val ZoomControlsHeight = 118.dp
+val ZoomRestHeight = 48.dp
 
 private fun log2(value: Float) = ln(value) / LN2
 
@@ -236,36 +237,33 @@ fun ZoomControls(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .padding(horizontal = 16.dp),
+                    .height(ZoomRestHeight)
+                    .padding(horizontal = 22.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Left side: Beautify / Retouch icon (OnePlus style)
                 SideButton(visible = true, description = "Beautify", onClick = {}) {
-                    BeautifyGlyph(Modifier.size(20.dp).rotate(rotation), color = Color(0xCCFFFFFF))
+                    BeautifyGlyph(Modifier.size(22.dp).rotate(rotation), color = Color.White)
                 }
 
                 Spacer(Modifier.weight(1f))
 
-                // Center zoom presets: 0.6, 1x, 2, 3, 6
                 if (canZoom) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         presets.forEachIndexed { index, preset ->
                             val selected = index == selectedIndex
                             Box(
                                 Modifier
-                                    .size(34.dp)
+                                    .size(32.dp)
                                     .then(
                                         if (selected) {
                                             Modifier
                                                 .clip(CircleShape)
-                                                .background(Color(0x403A2214))
-                                                .border(1.dp, Color(0x66FF7700), CircleShape)
+                                                .background(Color(0xFF1A1A1A))
                                         } else {
-                                            Modifier.clip(CircleShape)
+                                            Modifier
                                         }
                                     )
                                     .clickable { glideTo(preset) }
@@ -274,9 +272,9 @@ fun ZoomControls(
                             ) {
                                 Text(
                                     if (selected) formatZoom(zoom) + "×" else formatZoom(preset),
-                                    color = if (selected) BrinaColors.Accent else Color(0xDDFFFFFF),
-                                    fontSize = if (selected) 13.sp else 13.5.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                    color = if (selected) BrinaColors.Accent else Color(0xE6FFFFFF),
+                                    fontSize = 13.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.rotate(rotation),
                                 )
                             }
@@ -286,10 +284,9 @@ fun ZoomControls(
 
                 Spacer(Modifier.weight(1f))
 
-                // Right side: Filters icon (OnePlus 3-ring style)
                 SideButton(visible = filtersAvailable, description = "Filters", onClick = onFilters) {
                     FiltersGlyph(
-                        Modifier.size(20.dp).rotate(rotation),
+                        Modifier.size(22.dp).rotate(rotation),
                         color = if (filterActive) BrinaColors.Accent else Color.White,
                     )
                 }
@@ -308,7 +305,6 @@ private fun SideButton(
     Box(
         Modifier
             .size(36.dp)
-            .then(if (visible) Modifier.frosted(CircleShape, Color(0x33000000), 10.dp) else Modifier)
             .clip(CircleShape)
             .then(
                 if (visible) {

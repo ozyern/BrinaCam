@@ -147,7 +147,7 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val viewfinderTop = maxOf(ViewfinderTop, statusTop + 70.dp)
             val viewfinderHeight = maxWidth * state.settings.aspect.heightOverWidth
-            val zoomControlsTop = viewfinderTop + maxWidth * (4f / 3f) - ZoomControlsHeight
+            val zoomControlsTop = viewfinderTop + maxWidth * (4f / 3f) - (ZoomControlsHeight - ZoomRestHeight)
             // Bottom controls follow the 4:3 frame, but never run into the gesture bar.
             val frameBottom = viewfinderTop + maxWidth * (4f / 3f)
             val lowestShutter = maxHeight - navBottom - 12.dp - ModeStripHeight / 2 - (ModesBelowFrame - ShutterBelowFrame)
@@ -169,7 +169,7 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                         .height(viewfinderHeight)
                         .clipToBounds(),
                 ) {
-                    if (state.mode == CaptureMode.MASTER) {
+                    if (state.mode == CaptureMode.MASTER || state.mode == CaptureMode.HIRES) {
                         MasterPreviewSurface(
                             onSurface = { onEvent(CameraEvent.MasterSurface(it)) },
                             modifier = Modifier.fillMaxSize(),
@@ -203,8 +203,13 @@ fun CameraScreen(state: CameraUiState, onEvent: (CameraEvent) -> Unit) {
                             } else {
                                 focusPoint = offset
                                 focusKey++
-                                val surface = with(coordinateTransformer) { offset.transform() }
-                                onEvent(CameraEvent.FocusAt(surface.x, surface.y))
+                                if (currentState.mode == CaptureMode.HIRES) {
+                                    val size = this.size
+                                    onEvent(CameraEvent.FocusAt(offset.x / size.width, offset.y / size.height))
+                                } else {
+                                    val surface = with(coordinateTransformer) { offset.transform() }
+                                    onEvent(CameraEvent.FocusAt(surface.x, surface.y))
+                                }
                             }
                         }
                     }
